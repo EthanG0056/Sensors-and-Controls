@@ -1,0 +1,5 @@
+Pips to install
+
+!pip uninstall -y -q opencv-python opencv-contrib-python opencv-python-headless opencv-contrib-python-headless
+!pip install -q opencv-contrib-python==4.10.0.84
+!pip install -q --no-deps machinevision-toolbox-python mvtb-data ansitable pgraph-python spatialmath-python
