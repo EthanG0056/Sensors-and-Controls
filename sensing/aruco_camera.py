@@ -32,6 +32,6 @@ cam.plot_wireframe(X, Y, Z, color='b')
 plt.title('cube projected onto the image plane')
 plt.show()
 
-def create_camera(camname, lens_size, pixel_size, image_x, image_y, name):
+def create_camera(lens_size, pixel_size, image_x, image_y, name):
     camname = CentralCamera(f=lens_size, rho=pixel_size, imagesize=[image_x, image_y], pp=[image_x/2, image_y/2], name=name)
     print(camname)
