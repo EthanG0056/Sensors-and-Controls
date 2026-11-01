@@ -1,7 +1,52 @@
-Pips to install
 
+__Pips to install__
 pip install numpy
 pip install machinevision-toolbox-python
 pip install spatialmath-python
 pip install mujoco
 
+__Functions by file__
+
+    aruco_camera:
+    - detect_aruco_marker(image)
+        - Purpose: Processes the rawMuJoCo camera image matrix to find the marker.
+        - Logic: Uses cv2.aruco to detect the marker ID and corners. Returns the 2D 
+          pixel coordinates.
+    
+    - estimate_marker_pose(corners, camera_matrix, dist_coeffs)
+        - Purpose: Solves the Perspective-n-Point (PnP) problem.
+        - Logic: Uses cv2.solvePnP with the ArUco marker's known physical size to 
+          get the translation vector (tvec) and rotation vector (rvec) relative to the camera.
+    
+    - get_range_and_bearing(tvec)
+        - Purpose: Converts the 3D translation vector into the 2D metrics the EKF expects.
+        - Logic:
+            - Range = sqrt{x^2 + z^2} (depending on your camera axis setup).
+            - Bearing = arctan2(x,z).
+    
+    - get_camera_measurement(model, data, camera_name)
+        - Purpose: The main loop hook for the team
+        - Logic: Grabs the raw image bufferfrom MuJoCo using rendering contexts, flips/formats 
+          it into a NumPy array, passes it to the detector, and returns the EKF measurement 
+          vector [range, bearing]^T or [x, y, theta]^T.
+    
+    lidar:
+    - get_raw_lidar_data(model, data, sensor_name)
+        - Purpose: Fetches the raw range array from the MuJoCo simulation context.
+        - Logic: Accesses data.sensordata based on the sensor ID. TurtleBot3 2D LiDARs typically 
+          output a 360-degree array of distance floats.
+    
+    - filter_lidar_ranges(ranges, min_range=0.12, max_range=3.5)
+        - Purpose: Cleans up the sensor data.
+        - Logic: Replaces out-of-bounds readings (inf, negative, or max range clipping) with a 
+          static value or removes them entirely to prevent math errors during navigation.
+    
+    - convert_to_cartesian(ranges, angle_increment)
+        - Purpose: Transforms polar sensor coordinates into a local 2D (X, Y) coordinates system.
+        - Logic: Multiplies range by cos(theta) and sin(theta) relative to the robot's heading. 
+          This allows our team to easily calculate vector fields for obstacle avoidance.
+    
+    - get_closest_obstacle(ranges, angle_increment)
+        - Purpose: Directly assists the trajectory tracker.
+        - Logic: Identifies the minimum distance and its associated angle index. Returns a safety 
+          alert flag if an obstacle is within a critical threshold.
