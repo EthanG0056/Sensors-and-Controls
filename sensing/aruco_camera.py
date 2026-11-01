@@ -1,4 +1,4 @@
-"""ArUco marker detection and range/bearing measurements for MuJoCo."""
+# ArUco marker detection and range/bearing measurements for MuJoCo.
 
 from __future__ import annotations
 
@@ -32,7 +32,8 @@ class _Renderer(Protocol):
 
 
 def configure_marker_size(marker_size_m: float) -> None:
-    """Set the marker's physical side length in meters."""
+
+    # Set the marker's physical side length in meters.
     global _marker_size_m
 
     if not np.isfinite(marker_size_m) or marker_size_m <= 0:
@@ -41,15 +42,17 @@ def configure_marker_size(marker_size_m: float) -> None:
 
 
 def configure_marker_size_from_geom(
+        
     model: _ModelWithGeometries,
     geom_name: str,
     face_axes: tuple[int, int],
 ) -> None:
-    """Read a square marker's side length from a named MuJoCo geom.
+    
+    # Read a square marker's side length from a named MuJoCo geom.
 
-    MuJoCo geom sizes are half-extents. ``face_axes`` selects the two local
-    axes spanning the marker face, for example ``(0, 2)`` for an XZ face.
-    """
+    # MuJoCo geom sizes are half-extents. ``face_axes`` selects the two local
+    # axes spanning the marker face, for example ``(0, 2)`` for an XZ face.
+    
     geom = model.geom(geom_name)
     half_extents = np.asarray(geom.size, dtype=float).reshape(-1)
     if half_extents.shape != (3,):
@@ -67,7 +70,8 @@ def configure_marker_size_from_geom(
 
 
 def close_camera_renderer() -> None:
-    """Release the cached MuJoCo renderer after the simulation loop ends."""
+
+    # Release the cached MuJoCo renderer after the simulation loop ends.
     global _renderer, _renderer_model, _renderer_dimensions
 
     if _renderer is not None:
@@ -82,11 +86,12 @@ def close_camera_renderer() -> None:
 def detect_aruco_marker(
     image: NDArray[np.uint8],
 ) -> tuple[int, NDArray[np.float32]] | None:
-    """Return the first detected marker ID and its four (x, y) pixel corners.
+    
+    # Return the first detected marker ID and its four (x, y) pixel corners.
 
-    MuJoCo renderer images are RGB. Two-dimensional grayscale input is also
-    accepted. Returns ``None`` if no marker from ``DICT_4X4_50`` is visible.
-    """
+    # MuJoCo renderer images are RGB. Two-dimensional grayscale input is also
+    # accepted. Returns ``None`` if no marker from ``DICT_4X4_50`` is visible.
+    
     if image.ndim == 2:
         gray = image
     elif image.ndim == 3 and image.shape[2] == 3:
@@ -111,11 +116,12 @@ def estimate_marker_pose(
     camera_matrix: NDArray[np.floating],
     dist_coeffs: NDArray[np.floating],
 ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
-    """Estimate and return ``(tvec, rvec)`` for a detected marker.
+    
+    # Estimate and return ``(tvec, rvec)`` for a detected marker.
 
-    Configure the marker side length with ``configure_marker_size`` or
-    ``configure_marker_size_from_geom`` before calling this function.
-    """
+    # Configure the marker side length with ``configure_marker_size`` or
+    # ``configure_marker_size_from_geom`` before calling this function.
+    
     if _marker_size_m is None:
         raise RuntimeError(
             "Marker size is not configured; call configure_marker_size() "
@@ -152,12 +158,13 @@ def estimate_marker_pose(
 
 
 def get_range_and_bearing(tvec: NDArray[np.floating]) -> NDArray[np.float64]:
-    """Convert camera-frame translation to ``[[range], [bearing]]``.
 
-    OpenCV's camera frame looks along positive Z; X is horizontal. Range is
-    the XZ-plane distance and bearing is measured from the camera's forward
-    axis, positive to the right.
-    """
+    # Convert camera-frame translation to ``[[range], [bearing]]``.
+
+    # OpenCV's camera frame looks along positive Z; X is horizontal. Range is
+    # the XZ-plane distance and bearing is measured from the camera's forward
+    # axis, positive to the left.
+    
     translation = np.asarray(tvec, dtype=float).reshape(-1)
     if translation.size != 3 or not np.all(np.isfinite(translation)):
         raise ValueError("tvec must contain three finite translation values")
@@ -166,7 +173,7 @@ def get_range_and_bearing(tvec: NDArray[np.floating]) -> NDArray[np.float64]:
         raise ValueError("tvec must be in front of the camera (positive Z)")
 
     return np.array(
-        [[np.hypot(x, z)], [np.arctan2(x, z)]],
+        [[np.hypot(x, z)], [-np.arctan2(x, z)]],
         dtype=np.float64,
     )
 
@@ -176,11 +183,12 @@ def get_camera_measurement(
     data: object,
     camera_name: str,
 ) -> NDArray[np.float64] | None:
-    """Render a MuJoCo camera and return its ``[[range], [bearing]]`` marker measurement.
+    
+    # Render a MuJoCo camera and return its ``[[range], [bearing]]`` marker measurement.
 
-    Returns ``None`` when the marker is not visible. The caller must configure
-    the marker size after creating its MuJoCo model.
-    """
+    # Returns ``None`` when the marker is not visible. The caller must configure
+    # the marker size after creating its MuJoCo model.
+    
     try:
         import mujoco
     except ImportError as exc:

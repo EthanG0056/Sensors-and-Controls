@@ -26,7 +26,8 @@ def get_raw_lidar_data(
     data: _DataWithSensorReadings,
     sensor_name: str,
 ) -> NDArray[np.float64]:
-    """Return a copy of the named MuJoCo sensor's readings."""
+    
+    # Return a copy of the named MuJoCo sensor's readings.
     sensor = model.sensor(sensor_name)
     address = int(np.asarray(sensor.adr).reshape(-1)[0])
     dimension = int(np.asarray(sensor.dim).reshape(-1)[0])
@@ -47,7 +48,8 @@ def filter_lidar_ranges(
     min_ranges: float = 0.12,
     max_range: float = 3.5,
 ) -> NDArray[np.float64]:
-    """Replace invalid, too-close, and max-range-clipped readings with NaN."""
+    
+    # Replace invalid, too-close, and max-range-clipped readings with NaN.
     scan = np.asarray(ranges, dtype=np.float64)
     if scan.ndim != 1:
         raise ValueError("ranges must be a one-dimensional array")
@@ -71,11 +73,12 @@ def convert_to_cartesian(
     angles_increment: float,
     angle_min: float = 0.0,
 ) -> NDArray[np.float64]:
-    """Convert a scan to robot-frame ``(x forward, y left)`` points.
+    
+    # Convert a scan to robot-frame ``(x forward, y left)`` points.
 
-    Invalid readings produce ``[nan, nan]`` rows, retaining each ray's index.
-    The default angle convention starts forward at zero and increases left.
-    """
+    # Invalid readings produce ``[nan, nan]`` rows, retaining each ray's index.
+    # The default angle convention starts forward at zero and increases left.
+    
     scan = np.asarray(ranges, dtype=np.float64)
     if scan.ndim != 1:
         raise ValueError("ranges must be a one-dimensional array")
@@ -99,11 +102,12 @@ def get_closest_obstacle(
     min_range: float = 0.12,
     max_range: float = 3.5,
 ) -> tuple[float, float, bool]:
-    """Return the nearest valid range, its ray angle in radians, and safety alert.
+    
+    # Return the nearest valid range, its ray angle in radians, and safety alert.
 
-    Angles start at zero (forward) and increase counter-clockwise. If no valid
-    obstacle readings remain, returns ``(nan, nan, False)``.
-    """
+    # Angles start at zero (forward) and increase counter-clockwise. If no valid
+    # obstacle readings remain, returns ``(nan, nan, False)``.
+    
     if not np.isfinite(angle_increment) or angle_increment <= 0:
         raise ValueError("angle_increment must be finite and positive")
     if not np.isfinite(critical_threshold) or critical_threshold < 0:
@@ -122,7 +126,8 @@ def get_closest_obstacle(
 
 def show_cloud(points, colours=None, title='', frame='robot', ax=None,
                elev=22, azim=-75, size=1, nmax=20000, seed=0):
-    """Scatter plot of a point cloud, in the robot frame or the camera frame."""
+    
+    # Scatter plot of a point cloud, in the robot frame or the camera frame.
     P = np.asarray(points)
     C = colours
     per_point = (C is not None and not isinstance(C, str)
