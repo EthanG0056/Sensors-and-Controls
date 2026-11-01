@@ -1,0 +1,190 @@
+{
+  "scene": "robotis_tb3/scene_turtlebot3_burger.xml",
+  "mujoco": "3.17.0",
+  "python": "3.12.10",
+  "timestep_s": 0.002,
+  "radius_m": 0.033,
+  "track_m": 0.16,
+  "joint_friction_scale": 1.0,
+  "actuator_gain": [
+    0.1,
+    0.1
+  ],
+  "actuator_dyntype": [
+    0,
+    0
+  ],
+  "wheel_joint_frictionloss": [
+    0.1,
+    0.1
+  ],
+  "wheel_armature": [
+    0.01,
+    0.01
+  ],
+  "geom_friction": [
+    [
+      1.0,
+      0.005,
+      0.0001
+    ],
+    [
+      1.0,
+      0.005,
+      0.0001
+    ],
+    [
+      1.0,
+      0.005,
+      0.0001
+    ],
+    [
+      0.0001,
+      0.0001,
+      0.0001
+    ],
+    [
+      1.0,
+      0.005,
+      0.0001
+    ],
+    [
+      1.0,
+      0.005,
+      0.0001
+    ],
+    [
+      1.0,
+      0.005,
+      0.0001
+    ],
+    [
+      1.0,
+      0.005,
+      0.0001
+    ],
+    [
+      1.0,
+      0.005,
+      0.0001
+    ],
+    [
+      1.0,
+      0.005,
+      0.0001
+    ]
+  ],
+  "source_sha256": {
+    "robotis_tb3/assets/burger_base.stl": "7d7f3329a437b43bbcbbec59f9a2d1df1d88b59c3882c543d979baf73670f025",
+    "robotis_tb3/assets/lds.stl": "98f0bd7046159f83caab9509293112ef13534368535669124b91b5114c3132f6",
+    "robotis_tb3/assets/left_tire.stl": "578c9452ee51c2f71e5e6723b503d784e58a6ac317fa53ee308e645f204c8d6a",
+    "robotis_tb3/assets/right_tire.stl": "407aaf271ba7051c6186b220e1dc36b2a6eca688fced66a3347f49747b684596",
+    "robotis_tb3/assets/waffle_base.stl": "fcc85458c31f6c4bf2afdc93469128c49723189c5a4c07b8c91baebc132e9a0d",
+    "robotis_tb3/assets/waffle_pi_base.stl": "706230121a287ff953c4c84d344014a147fc27615b0e95221aaf04cb0dca7e42",
+    "robotis_tb3/scene_turtlebot3_burger.xml": "4e96ce8f49b5011f4d52f0ab3fae153c0ba51ed275820cf9776be052e8228cd4",
+    "robotis_tb3/scene_turtlebot3_burger_gain_test.xml": "83a3e500af6b94e40d3d489f213c8e5810518d926b0e20dcc21796f0d3397241",
+    "robotis_tb3/scene_turtlebot3_waffle_pi.xml": "d4024930cf927779f39c4629bf263b5df54a7a8fbedea6c524ca22e2ba43c333",
+    "robotis_tb3/turtlebot3_burger.xml": "5558b3539fc34d4d5aa443b55918ed7e83de5373a94a94539b56e17cc5623f1f",
+    "robotis_tb3/turtlebot3_burger_gain_test.xml": "1ed43553252dac47239b9c3e9fe2736146fa710203ea7dd741c986b4dc8e5221",
+    "robotis_tb3/turtlebot3_waffle_pi.xml": "c9804c46e8a72948ade11d64312a6ba17df25d3178627810d6b5ae77b6d1eeac"
+  },
+  "samples": 3500,
+  "phases": {
+    "forward": {
+      "command_rad_s": [
+        3.0303030303030303,
+        3.0303030303030303
+      ],
+      "final_rad_s": [
+        1.4374984120417817,
+        1.479658801909157
+      ],
+      "mean_rad_s": [
+        1.3917983702573269,
+        1.4241993675964717
+      ],
+      "wheel_rmse_rad_s": [
+        1.6478149687054533,
+        1.6165484249600939
+      ],
+      "wheel_bias_rad_s": [
+        -1.6385046600457027,
+        -1.6061036627065592
+      ],
+      "distance_m": 0.11687423218154878,
+      "ideal_distance_m": 0.30000000000000004,
+      "distance_error_m": -0.18312576781845125,
+      "heading_rad": 0.011446688413958284,
+      "ideal_heading_rad": 0.0,
+      "heading_error_rad": 0.011446688413958284,
+      "distance_rmse_m": 0.10674543983637462,
+      "heading_rmse_rad": 0.008373327155480993,
+      "encoder_predicted_signed_distance_m": 0.13934375492973278,
+      "encoder_predicted_heading_rad": 0.02003942152318211
+    },
+    "rotation": {
+      "command_rad_s": [
+        -1.2121212121212122,
+        1.2121212121212122
+      ],
+      "final_rad_s": [
+        -0.06181341201114703,
+        0.061653526040273306
+      ],
+      "mean_rad_s": [
+        -0.04602360678731544,
+        0.1056833275271508
+      ],
+      "wheel_rmse_rad_s": [
+        1.1721960065989565,
+        1.1210557131831869
+      ],
+      "wheel_bias_rad_s": [
+        1.1660976053338987,
+        -1.1064378845940606
+      ],
+      "distance_m": 0.001998654845842028,
+      "ideal_distance_m": 0.0,
+      "distance_error_m": 0.001998654845842028,
+      "heading_rad": 0.048235165769378835,
+      "ideal_heading_rad": 1.0,
+      "heading_error_rad": -0.9517648342306212,
+      "distance_rmse_m": 0.0018013878273484673,
+      "heading_rmse_rad": 0.5470630758025462,
+      "encoder_predicted_signed_distance_m": 0.002016906516563273,
+      "encoder_predicted_heading_rad": 0.0625623409291543
+    },
+    "stop": {
+      "command_rad_s": [
+        0.0,
+        0.0
+      ],
+      "final_rad_s": [
+        1.3662622862123692e-05,
+        9.712430096592075e-06
+      ],
+      "mean_rad_s": [
+        -0.0002472535353260958,
+        0.00026965516970856935
+      ],
+      "wheel_rmse_rad_s": [
+        0.0026833001572949115,
+        0.0026778045589127978
+      ],
+      "wheel_bias_rad_s": [
+        -0.0002472535353260958,
+        0.00026965516970856935
+      ],
+      "distance_m": 4.371853356232878e-06,
+      "ideal_distance_m": 0.0,
+      "distance_error_m": 4.371853356232878e-06,
+      "heading_rad": 0.00016250798341386347,
+      "ideal_heading_rad": 0.0,
+      "heading_error_rad": 0.00016250798341386347,
+      "distance_rmse_m": 4.360635646368898e-06,
+      "heading_rmse_rad": 0.00016253613763727817,
+      "encoder_predicted_signed_distance_m": 7.362301277284213e-07,
+      "encoder_predicted_heading_rad": 0.00023869071152716315
+    }
+  }
+}
