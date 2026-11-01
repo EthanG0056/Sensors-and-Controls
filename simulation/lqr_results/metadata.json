@@ -1,0 +1,221 @@
+{
+  "state_source": "IDEAL-STATE DIAGNOSTIC ONLY",
+  "estimated_state_runs": 0,
+  "python": "3.12.10",
+  "mujoco": "3.17.0",
+  "numpy": "2.5.4",
+  "scipy": "1.18.1",
+  "controller_dt": 0.05,
+  "initial_conditions": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      -0.08,
+      0.06,
+      0.2
+    ],
+    [
+      0.08,
+      -0.06,
+      -0.2
+    ]
+  ],
+  "configs": {
+    "balanced": {
+      "q": [
+        156.25,
+        156.25,
+        16.0
+      ],
+      "r": [
+        69.44444444444444,
+        1.5625
+      ]
+    },
+    "tracking": {
+      "q": [
+        625.0,
+        625.0,
+        64.0
+      ],
+      "r": [
+        69.44444444444444,
+        1.5625
+      ]
+    },
+    "effort": {
+      "q": [
+        156.25,
+        156.25,
+        16.0
+      ],
+      "r": [
+        277.77777777777777,
+        6.25
+      ]
+    }
+  },
+  "controllability": [
+    {
+      "reference": "straight",
+      "continuous_rank": 3,
+      "continuous_singular_values": [
+        1.0,
+        1.0,
+        0.08
+      ],
+      "discrete_rank": 3,
+      "discrete_singular_values": [
+        0.08660409922676832,
+        0.08660254037844388,
+        0.00028283762138894483
+      ]
+    },
+    {
+      "reference": "curve",
+      "continuous_rank": 3,
+      "continuous_singular_values": [
+        1.0043286314747777,
+        0.9999999999999999,
+        0.31048349392520047
+      ],
+      "discrete_rank": 3,
+      "discrete_singular_values": [
+        0.08660450854803149,
+        0.0865948242978388,
+        0.0010976537075983394
+      ]
+    },
+    {
+      "reference": "rotation",
+      "continuous_rank": 3,
+      "continuous_singular_values": [
+        1.012719112093773,
+        1.0,
+        0.4
+      ],
+      "discrete_rank": 3,
+      "discrete_singular_values": [
+        0.08660254037844387,
+        0.08658955096686118,
+        0.001414095714817658
+      ]
+    },
+    {
+      "reference": "stationary",
+      "continuous_rank": 2,
+      "continuous_singular_values": [
+        1.0,
+        1.0,
+        0.0
+      ],
+      "discrete_rank": 2,
+      "discrete_singular_values": [
+        0.08660254037844388,
+        0.08660254037844387,
+        0.0
+      ]
+    },
+    {
+      "reference": "low_speed",
+      "continuous_rank": 3,
+      "continuous_singular_values": [
+        1.0,
+        1.0,
+        0.01
+      ],
+      "discrete_rank": 3,
+      "discrete_singular_values": [
+        0.086602564735409,
+        0.08660254037844388,
+        3.535532911564837e-05
+      ]
+    }
+  ],
+  "protected_sha256": {
+    "simulation/robotis_tb3/tb3_waffle_pi.png": "0c1140a78e5407188488cd236ac5fb7797d8628c4b878da1e62626d16efd3f54",
+    "simulation/robotis_tb3/scene_turtlebot3_waffle_pi.xml": "d4024930cf927779f39c4629bf263b5df54a7a8fbedea6c524ca22e2ba43c333",
+    "simulation/robotis_tb3/LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "simulation/robotis_tb3/turtlebot3_waffle_pi.xml": "c9804c46e8a72948ade11d64312a6ba17df25d3178627810d6b5ae77b6d1eeac",
+    "simulation/robotis_tb3/tb3_burger.png": "5f4381a903c47b497f7b49d0f7ef88637db89d1982841e56c0d6096aad0a3611",
+    "simulation/robotis_tb3/turtlebot3_burger.xml": "5558b3539fc34d4d5aa443b55918ed7e83de5373a94a94539b56e17cc5623f1f",
+    "simulation/robotis_tb3/scene_turtlebot3_burger_gain_test.xml": "83a3e500af6b94e40d3d489f213c8e5810518d926b0e20dcc21796f0d3397241",
+    "simulation/robotis_tb3/scene_turtlebot3_burger.xml": "4e96ce8f49b5011f4d52f0ab3fae153c0ba51ed275820cf9776be052e8228cd4",
+    "simulation/robotis_tb3/turtlebot3_burger_gain_test.xml": "1ed43553252dac47239b9c3e9fe2736146fa710203ea7dd741c986b4dc8e5221",
+    "simulation/robotis_tb3/assets/right_tire.stl": "407aaf271ba7051c6186b220e1dc36b2a6eca688fced66a3347f49747b684596",
+    "simulation/robotis_tb3/assets/left_tire.stl": "578c9452ee51c2f71e5e6723b503d784e58a6ac317fa53ee308e645f204c8d6a",
+    "simulation/robotis_tb3/assets/waffle_base.stl": "fcc85458c31f6c4bf2afdc93469128c49723189c5a4c07b8c91baebc132e9a0d",
+    "simulation/robotis_tb3/assets/burger_base.stl": "7d7f3329a437b43bbcbbec59f9a2d1df1d88b59c3882c543d979baf73670f025",
+    "simulation/robotis_tb3/assets/lds.stl": "98f0bd7046159f83caab9509293112ef13534368535669124b91b5114c3132f6",
+    "simulation/robotis_tb3/assets/waffle_pi_base.stl": "706230121a287ff953c4c84d344014a147fc27615b0e95221aaf04cb0dca7e42",
+    "simulation/identification_results/summary.csv": "875103afd87a9c6c14903878c671af844b82bf9cb63ef585e9be2bd9b5df67e6",
+    "simulation/identification_results/wheel_steps.png": "e6c46e8cb626256c72d7d06be74745bb111a1d9a88256e5711264c3c1f14e768",
+    "simulation/identification_results/kv1_forward_+0.16.csv": "22858907bad9c2e3f46be603a99acef6b380288836472250a65c23f2340be979",
+    "simulation/identification_results/held_out_errors.png": "d1ad78381183fce4dac5ff80f12af83c4652ae181bb98814bc586ac93b8b29c6",
+    "simulation/identification_results/models.json": "5931ca6a1b81c16582152d123cd2959ed04c2e54f2c273ebcc9d231f99bcc350",
+    "simulation/identification_results/kv1_turn_+1.10.csv": "42fd6b4982ed3bfcd7c42ee25cc561839dad3b1ab18aa1609970c248ec553281",
+    "simulation/identification_results/kv0.1_turn_-0.90.csv": "df109944b7cc9f7db6896608ff85bc5c8c530ec5406767c578a6d82d5b1726e0",
+    "simulation/identification_results/fine_summary.csv": "ce663f1d654c4a9dec91649569060f6469f3932deb1b445730c475eefb9920a0",
+    "simulation/identification_results/kv1_turn_+0.50.csv": "d1c4755978b1e83ff3139b9e63310207df936a9fc6c27bba18e0936f0ec46ac0",
+    "simulation/identification_results/kv1_forward_+0.13.csv": "92dd66a041d70c6fddce2dcf4e7a5afde7513be96f1d3275749e1cac3050dd98",
+    "simulation/identification_results/kv1_forward_+0.07.csv": "faff09e978b8f5c4d28d90c25de1d35eeba0240463c9afdc51f66d919edcdf3b",
+    "simulation/identification_results/kv0.1_turn_-1.10.csv": "cd85f93d4a4ed5c1c20a2162bf642b8dbeb1acbf52bc30b9cbc6d8003f49d51e",
+    "simulation/identification_results/kv0.1_turn_-0.50.csv": "8b09c333455ef51a28af690637464cd0e3861c74082a60793af3504086896ef3",
+    "simulation/identification_results/kv1_forward_+0.04.csv": "412b4ce057b235b75c4a8430483ab1fbfd49b9bce3b3323c32e0255627a49397",
+    "simulation/identification_results/kv1_turn_+0.90.csv": "e457e9edca13bb6433cf6b28976378fc77e3f9f41b7e0386eb350b847322f66f",
+    "simulation/identification_results/kv1_forward_+0.10.csv": "67e65aa4a213f18da3f1dda74519bddee1ac005cface5256db3b2bc4550e31fb",
+    "simulation/identification_results/response.png": "50235eb55ceb62fadef4a5a41dc480ddd38e69a9f1064aa742e29b6fcebcc1c3",
+    "simulation/identification_results/kv1_turn_-0.70.csv": "88a37e870d45993bc495b811d525e02722efd7ba043e6ea98a09c51be0bfb343",
+    "simulation/identification_results/kv0.1_forward_+0.16.csv": "cf0874390a89767c2acc03c9ff07f154e8fd94b5e23f1f4a6d837cb8e6ef6508",
+    "simulation/identification_results/kv0.1_turn_+0.70.csv": "cced45e36b3e567d982a10d13ce83d1cd18fe8a5786f23c4061429b6a6dd94a4",
+    "simulation/identification_results/kv0.1_forward_+0.13.csv": "7c5a2322a238b6a48dd1ec0f778c68dca85bba446f574f9b6ba00292de25cd74",
+    "simulation/identification_results/kv0.1_forward_+0.07.csv": "b1a230635d904d5d90a36d4b69f4ec8e2e2443eb036dab594c74e7f24b4ce1cf",
+    "simulation/identification_results/kv0.1_turn_-0.30.csv": "4d162762d6172cb308a0e2a4a0f36d227ab9f837eba315177a8657ef6e384d73",
+    "simulation/identification_results/kv0.1_forward_+0.04.csv": "b26145df3ed878a718a61d19059a028281f78034e7ff746ff2d422c0e0b03dba",
+    "simulation/identification_results/kv0.1_forward_+0.10.csv": "6b1213db18e5cd24a264b74686aaa5ddf268e8d250e4e8f689ec09d7fadaf510",
+    "simulation/identification_results/kv1_turn_+0.30.csv": "f1fd480372ccb6939d89352eaca459cb0299a127b697b555d9b08670153b63ca",
+    "simulation/identification_results/kv1_turn_-0.50.csv": "6818eea8f21dee58f694376b776d356a779a8682feec7710d91a23dea616f9cb",
+    "simulation/identification_results/kv1_forward_-0.07.csv": "b352f29e46249d23805dc7881b35b2687d8469f2564bf223da9b1a1f2e660109",
+    "simulation/identification_results/kv1_forward_-0.13.csv": "3d7ee6dc442418b975a45f9fb71d5f0e9b74f871a28cb3a1e0376bdf518879fb",
+    "simulation/identification_results/kv0.1_turn_+0.90.csv": "df114ecbcafbc642c38288745456162f066d7fc5d31f95f404a484a191aa490c",
+    "simulation/identification_results/kv1_turn_-1.10.csv": "428efc5d5a308ce6ad9c29a12d16cab782a1052b13f5b8685878ad37f1d1ea7a",
+    "simulation/identification_results/kv1_forward_-0.10.csv": "674b1b6945d0b716ee421c896cb946f38d998537037dcaa4d3b5e83eeb54123b",
+    "simulation/identification_results/kv1_forward_-0.04.csv": "8d5cb4ff2cdf32c0e3679066bc8e03ec2112f2a0985b9cd795616a2d2d6f5b3b",
+    "simulation/identification_results/kv1_turn_-0.90.csv": "e5ea55e822b71cd110aab00ccf82046101a89bf6103c95e6ff8b251c3183eca4",
+    "simulation/identification_results/kv0.1_turn_+0.50.csv": "a8bfcb0846ae916313fcf6885f141acb38786278d219d9870b2a3a096905d585",
+    "simulation/identification_results/kv0.1_turn_+1.10.csv": "ca1ece7976138e5b17ab621edf3d371748b39d2210ac1a87df2489007c4d44bf",
+    "simulation/identification_results/RESULTS.md": "c240f4506ad95afdb66f68d0fae8913f93643b8ce2f4f61d45595af66c10cb58",
+    "simulation/identification_results/kv1_forward_-0.16.csv": "39540a16097d2da41e457fcbd7348a563332d7f0a8c930ed3fa8de0d90a65b34",
+    "simulation/identification_results/kv0.1_turn_+0.30.csv": "370574081ea4b1b38b16fb3190a08a5d30634655960379850107488a62ed35a4",
+    "simulation/identification_results/kv0.1_forward_-0.07.csv": "0423ffa4d854ba9dfc93384468b97a5ec8fed501cb7860b530e9b0497c8aca81",
+    "simulation/identification_results/kv0.1_forward_-0.13.csv": "62a8d9e92f0cd91a7817e5f28c94702ce01d436d9bd014b8e4ec5442271a47a1",
+    "simulation/identification_results/kv1_turn_-0.30.csv": "91316084372e798535dbf6a1dfb442b9f305ff5ba2f6f1772ff3f277cfbdec57",
+    "simulation/identification_results/kv0.1_forward_-0.10.csv": "a3b261bd8c19fac3dfcc608e9dabe2fcb0177756fb2ab7a05399990ce98b2747",
+    "simulation/identification_results/kv0.1_forward_-0.04.csv": "8a6bcfda6d5cbf44084fd4d0f0c8c1d5be73fb6508c5dd32f5d87ca25586751a",
+    "simulation/identification_results/kv1_turn_+0.70.csv": "88eedf7f4128049815566967d404435ebf966513cad506891512025757870e2f",
+    "simulation/identification_results/kv0.1_turn_-0.70.csv": "6e87624caf83d5cc85ad97a97919cae0d57f267292db36f9bde14cbcb064ae68",
+    "simulation/identification_results/kv0.1_forward_-0.16.csv": "da52664bcf0f88ab598aba65c35eca32d68bac9a26c8b74d7299fe651ef70c52",
+    "simulation/validation_results/scene_turtlebot3_burger_gain_test.json": "edff8e19173b37d6e3af0d32f06c0ca8110448030e79c1e35f920925a9bfbd4e",
+    "simulation/validation_results/scene_turtlebot3_burger_gain_test_joint_friction_0.json": "4d103a1ac7304cb83625c3eb52e175237a909309604ff0d3d5371e901d665108",
+    "simulation/validation_results/scene_turtlebot3_burger.csv": "59f7d13f183a655475b93f048663f3089884b0882a6c3ed9859917fdef14584a",
+    "simulation/validation_results/scene_turtlebot3_burger_gain_test.csv": "42a0e3e4fe04db603623153c5ab98e96e1ed0c9a3418a8681f8fe4e989398a27",
+    "simulation/validation_results/scene_turtlebot3_burger_gain_test_joint_friction_0.csv": "f4b7d729594e6f9f55056389ca00846953668e78a9a9da3eff4d33bd77acb5f0",
+    "simulation/validation_results/scene_turtlebot3_burger.json": "d1024044aa294720b5f909b85d9cd127c9dcae619e9be7f752bb0a3ba7d064b7",
+    "simulation/validation_results/scene_turtlebot3_burger_joint_friction_0.json": "ad03c438ae69804c5022f4f1d63b5ecdb899c1942dc95ea46ce69a64933256df",
+    "simulation/validation_results/scene_turtlebot3_burger_joint_friction_0.csv": "8000eaf11903743543550a1bd71a608f51cda8da753e34d7e06068ebe6f1170c",
+    "simulation/PART_A_MODELLING.md": "ba11dfe506a9adbb7ae40056444b320ca772f5954173067ac9e384f88e77a7db",
+    "simulation/VALIDATION.md": "ade819e6e5d8df1a05228faaf68c064240f25980aa42246f5a62ec9db218b5e2",
+    "simulation/validate_drive.py": "eb1c1a35b23879ea12a7b3004301922c6ab18411181860dd28e6b7c0096342bf",
+    "simulation/turtlebot.py": "f78627dd55eeb947c07c32e3014671f25b76716334e21f95ce97bacd71719eed"
+  },
+  "source_sha256": {
+    "simulation/benchmark_lqr.py": "4e43c1a86646645ea5e32e235fe361b26ce59303e72ab6dea86f9b8c35a1d30a",
+    "control/lqr_controller.py": "4dce7804552d834f26e3ad1780e3fbc6f7e9f2d91da8bcad2c552197ad36a5bc",
+    "control/trajectory.py": "cf8c2bf84cca85a81157b6a2727bd2a4d9b4bf0df8fc64ac60efd3b72ea36d3b",
+    "tests/test_lqr.py": "5cb971970b5bb54ca59e6848d33ae74d18ee2040317e817cfb4b061c6c99fb09"
+  },
+  "trials": 66
+}

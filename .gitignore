@@ -1,0 +1,5 @@
+# Local Python environments and generated caches (keep scientific evidence tracked).
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
