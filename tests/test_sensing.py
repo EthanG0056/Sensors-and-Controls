@@ -1,10 +1,16 @@
 import contextlib
 import io
+from pathlib import Path
+import sys
+import time
 import unittest
 
 import cv2
 import mujoco
 import numpy as np
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sensing import aruco_camera, lidar
 
@@ -231,5 +237,24 @@ class LidarTests(MuJoCoSensorTests):
             plt.close(figure)
 
 
+def _run_tests_and_show_scene():
+    suite = unittest.defaultTestLoader.loadTestsFromModule(
+        sys.modules[__name__]
+    )
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    if not result.wasSuccessful():
+        return 1
+
+    import mujoco.viewer
+
+    model, data, _ = _make_sensor_scene()
+    print("MuJoCo sensor scene is open. Close the viewer window to exit.")
+    with mujoco.viewer.launch_passive(model, data) as viewer:
+        while viewer.is_running():
+            viewer.sync()
+            time.sleep(1 / 60)
+    return 0
+
+
 if __name__ == "__main__":
-    unittest.main()
+    raise SystemExit(_run_tests_and_show_scene())
