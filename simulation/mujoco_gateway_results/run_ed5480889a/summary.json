@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "checks": {
+    "forward_accepted": true,
+    "turn_accepted": true,
+    "rejected_stale": true,
+    "explicit_rearm": true,
+    "actual_zero_on_expiry": true,
+    "stepped_during_silence": true,
+    "forward_response": true,
+    "turn_response": true,
+    "subsequent_deceleration": true,
+    "observed_movement": true
+  },
+  "forward_wheel_at_zero_write_rad_s": [
+    2.8716813371378147,
+    2.8753952780840293
+  ],
+  "post_expiry_wheel_rad_s": [
+    5.2453935468180994e-05,
+    6.000514500424633e-05
+  ],
+  "post_expiry_sim_interval_s": 0.4059999999999553,
+  "forward_displacement_m": 0.05694442472991352,
+  "first_zero_write_wall_lateness_s": 0.0007645830046385527,
+  "simulation_advance_during_silence_s": 0.7959999999999123,
+  "terminal_physical_stop_claim": false
+}

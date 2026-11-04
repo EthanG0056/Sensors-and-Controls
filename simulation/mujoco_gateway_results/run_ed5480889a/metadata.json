@@ -1,0 +1,57 @@
+{
+  "owner_pid": 12983,
+  "mujoco": "3.17.0",
+  "numpy": "2.5.4",
+  "python": "3.12.10",
+  "scene": "/Users/arnoekruger/Downloads/Sensors-and-Controls-git/simulation/robotis_tb3/scene_turtlebot3_burger_gain_test.xml",
+  "timestep_s": 0.002,
+  "actuator_names": [
+    "wheel_left",
+    "wheel_right"
+  ],
+  "actuator_ids": [
+    0,
+    1
+  ],
+  "joint_ids": [
+    1,
+    2
+  ],
+  "velocity_dofs": [
+    6,
+    7
+  ],
+  "gains": [
+    1.0,
+    1.0
+  ],
+  "control_limits": [
+    [
+      -6.67,
+      6.67
+    ],
+    [
+      -6.67,
+      6.67
+    ]
+  ],
+  "state_source": "prescribed open-loop wheel commands; no EKF or pose feedback",
+  "base_pose_use": "evaluation only",
+  "initial_settle_sim_s": 2.0000000000000013,
+  "wall_origin": 167459.130826625,
+  "max_runtime_wall_s": 20.0,
+  "max_lease_s": 1.2,
+  "source_sha256": {
+    "scene_turtlebot3_burger_gain_test.xml": "83a3e500af6b94e40d3d489f213c8e5810518d926b0e20dcc21796f0d3397241",
+    "turtlebot3_burger_gain_test.xml": "1ed43553252dac47239b9c3e9fe2736146fa710203ea7dd741c986b4dc8e5221",
+    "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+    "assets/burger_base.stl": "7d7f3329a437b43bbcbbec59f9a2d1df1d88b59c3882c543d979baf73670f025",
+    "assets/left_tire.stl": "578c9452ee51c2f71e5e6723b503d784e58a6ac317fa53ee308e645f204c8d6a",
+    "assets/right_tire.stl": "407aaf271ba7051c6186b220e1dc36b2a6eca688fced66a3347f49747b684596",
+    "assets/lds.stl": "98f0bd7046159f83caab9509293112ef13534368535669124b91b5114c3132f6"
+  },
+  "code_sha256": {
+    "control/command_gateway.py": "0ce92ecfa0f89700bd23bb7c3af5e8ac0f734d99b65fed9660b543a98b0b3a1e",
+    "simulation/demo_mujoco_command_gateway.py": "67682c7e9b656390f62601e9cd95c90121307de834061a5e42dfa115106344c4"
+  }
+}
