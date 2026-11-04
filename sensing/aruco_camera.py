@@ -149,7 +149,7 @@ def estimate_marker_pose(
         image_corners,
         intrinsics,
         distortion,
-        flags=cv2.SOLVEPNP_IPPE_SQUARE,
+        flags=cv2.SOLVEPNP_ITERATIVE,
     )
     if not success:
         raise RuntimeError("OpenCV could not estimate the ArUco marker pose")
