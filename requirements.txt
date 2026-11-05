@@ -1,0 +1,8 @@
+numpy
+scipy
+matplotlib
+opencv-contrib-python
+mujoco
+open3d
+machinevision-toolbox-python
+spatialmath-python
