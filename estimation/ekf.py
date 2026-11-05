@@ -98,21 +98,49 @@ def motion_jacobian(state, control, dt):
 
 # ========================== CAMERA MODEL ========================== #
 
-def camera_model(state, marker_position):
-
-    # Predicted range and bearing from robot to ArUco marker.
+def camera_model(
+    state,
+    marker_position,
+    camera_offset=(0.0, 0.0),
+    camera_yaw_offset=0.0,
+):
 
     x, y, theta = state
     marker_x, marker_y = marker_position
 
-    dx = marker_x - x
-    dy = marker_y - y
+    camera_x_offset, camera_y_offset = camera_offset
 
-    marker_range = np.hypot(dx, dy)
+    # Camera position in the world frame
+    camera_x = (
+        x
+        + camera_x_offset * np.cos(theta)
+        - camera_y_offset * np.sin(theta)
+    )
 
-    world_angle = np.arctan2(dy, dx)
+    camera_y = (
+        y
+        + camera_x_offset * np.sin(theta)
+        + camera_y_offset * np.cos(theta)
+    )
 
-    marker_bearing = wrap(world_angle - theta)
+    camera_theta = theta + camera_yaw_offset
+
+    dx = marker_x - camera_x
+    dy = marker_y - camera_y
+
+    marker_range = np.hypot(
+        dx,
+        dy
+    )
+
+    world_angle = np.arctan2(
+        dy,
+        dx
+    )
+
+    marker_bearing = wrap(
+        world_angle - camera_theta
+    )
 
     return np.array([
         marker_range,
@@ -120,26 +148,81 @@ def camera_model(state, marker_position):
     ])
 
 
-def camera_jacobian(state, marker_position):
+def camera_jacobian(
+    state,
+    marker_position,
+    camera_offset=(0.0, 0.0),
+    camera_yaw_offset=0.0,
+):
 
-    # Jacobian of camera range/bearing measurement.
-
-    x, y, _ = state
+    x, y, theta = state
     marker_x, marker_y = marker_position
 
-    dx = marker_x - x
-    dy = marker_y - y
+    camera_x_offset, camera_y_offset = camera_offset
 
-    range_sq = dx**2 + dy**2
-    marker_range = np.sqrt(range_sq)
+    camera_x = (
+        x
+        + camera_x_offset * np.cos(theta)
+        - camera_y_offset * np.sin(theta)
+    )
 
-    # Prevent divide by 0
+    camera_y = (
+        y
+        + camera_x_offset * np.sin(theta)
+        + camera_y_offset * np.cos(theta)
+    )
+
+    dx = marker_x - camera_x
+    dy = marker_y - camera_y
+
+    range_sq = (
+        dx**2
+        + dy**2
+    )
+
+    marker_range = np.sqrt(
+        range_sq
+    )
+
     if marker_range < 1e-9:
-        raise ValueError("Marker is too close to calculate a valid Jacobian")
+
+        raise ValueError(
+            "Marker is too close to calculate a valid Jacobian"
+        )
+
+    # Derivatives of marker position relative to camera
+    # with respect to robot heading.
+    dx_dtheta = (
+        camera_x_offset * np.sin(theta)
+        + camera_y_offset * np.cos(theta)
+    )
+
+    dy_dtheta = (
+        -camera_x_offset * np.cos(theta)
+        + camera_y_offset * np.sin(theta)
+    )
+
+    range_dtheta = (
+        dx * dx_dtheta
+        + dy * dy_dtheta
+    ) / marker_range
+
+    bearing_dtheta = (
+        dx * dy_dtheta
+        - dy * dx_dtheta
+    ) / range_sq - 1.0
 
     H = np.array([
-        [-dx / marker_range, -dy / marker_range,  0.0],
-        [ dy / range_sq,     -dx / range_sq,     -1.0]
+        [
+            -dx / marker_range,
+            -dy / marker_range,
+            range_dtheta
+        ],
+        [
+            dy / range_sq,
+            -dx / range_sq,
+            bearing_dtheta
+        ]
     ])
 
     return H
@@ -167,18 +250,28 @@ class TurtleBotEKF:
         self.P = F @ self.P @ F.T + self.Q
 
 
-    def update_camera(self, measurement, marker_position):
+    def update_camera(
+        self,
+        measurement,
+        marker_position,
+        camera_offset=(0.0, 0.0),
+        camera_yaw_offset=0.0,
+    ):
 
         z = np.asarray(measurement, dtype=float).reshape(2)
 
         expected = camera_model(
             self.state,
-            marker_position
+            marker_position,
+            camera_offset,
+            camera_yaw_offset,
         )
 
         H = camera_jacobian(
             self.state,
-            marker_position
+            marker_position,
+            camera_offset,
+            camera_yaw_offset,
         )
 
         innovation = z - expected

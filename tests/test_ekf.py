@@ -156,6 +156,86 @@ def test_camera_jacobian():
     print("Camera Jacobian test passed")
 
 
+def test_camera_jacobian_with_offset():
+
+    state = np.array([
+        0.4,
+        -0.2,
+        0.6
+    ])
+
+    marker_position = np.array([
+        2.0,
+        1.0
+    ])
+
+    camera_offset = (
+        0.05,
+        0.0
+    )
+
+    camera_yaw_offset = 0.0
+
+    H_analytic = camera_jacobian(
+        state,
+        marker_position,
+        camera_offset,
+        camera_yaw_offset
+    )
+
+    epsilon = 1e-6
+
+    H_numeric = np.zeros(
+        (2, 3)
+    )
+
+    for i in range(3):
+
+        state_plus = state.copy()
+        state_minus = state.copy()
+
+        state_plus[i] += epsilon
+        state_minus[i] -= epsilon
+
+        measurement_plus = camera_model(
+            state_plus,
+            marker_position,
+            camera_offset,
+            camera_yaw_offset
+        )
+
+        measurement_minus = camera_model(
+            state_minus,
+            marker_position,
+            camera_offset,
+            camera_yaw_offset
+        )
+
+        difference = (
+            measurement_plus
+            - measurement_minus
+        )
+
+        difference[1] = wrap(
+            difference[1]
+        )
+
+        H_numeric[:, i] = (
+            difference
+            / (2 * epsilon)
+        )
+
+    assert np.allclose(
+        H_analytic,
+        H_numeric,
+        atol=1e-5
+    )
+
+    print(
+        "Camera Jacobian with offset test passed"
+    )
+
+
 # ========================== RUN TESTS ========================== #
 
 test_straight_motion()
@@ -163,3 +243,4 @@ test_camera_measurement()
 test_wheel_odometry()
 test_motion_jacobian()
 test_camera_jacobian()
+test_camera_jacobian_with_offset()
