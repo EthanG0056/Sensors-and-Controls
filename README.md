@@ -3,9 +3,10 @@
 
 Repository for Integrated Project.
 Group 23:
-    Ethan Griffiths
-    Lachlan Taylor
-    Arnoe Kruger
+
+- Ethan Griffiths (25364771)
+- Lachlan Taylor (student id)
+- Arnoe Kruger (student id)
 
 ## Part A: Modelling
 
@@ -52,3 +53,20 @@ freshness and validity before dispatching commands, while
 leases. Related interface and gateway checks are in
 [test_estimated_pose_interface.py](tests/test_estimated_pose_interface.py) and
 [test_command_gateway.py](tests/test_command_gateway.py).
+
+## Team member contributions
+
+**Ethan Griffiths:**
+
+- Sensing:
+  - aruco camera
+  - lidar
+  - calibration
+
+**Lachlan Taylor:**
+
+put something here
+
+**Arnoe Kruger:**
+
+put something here
