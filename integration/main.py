@@ -38,6 +38,17 @@ from control.terminal_controller import (
     TerminalParameters,
 )
 
+from control.staged_terminal_controller import (
+    StagedTrajectoryTerminalController,
+)
+
+from control.estimated_pose_interface import (
+    PoseEstimate,
+    InterfacePolicy,
+    EstimatedPoseInterface,
+    ClearanceGrant,
+)
+
 from control.trajectory import (
     reference,
     DURATIONS,
@@ -56,8 +67,15 @@ DURATION = DURATIONS[
     TRAJECTORY_NAME
 ]
 
+TERMINAL_TIME = 45.0
+
+TOTAL_DURATION = (
+    DURATION
+    + TERMINAL_TIME
+)
+
 STEPS = int(
-    DURATION / DT
+    TOTAL_DURATION / DT
 )
 
 CAMERA_OFFSET = (
@@ -343,6 +361,14 @@ MARKER_POSITION = data.geom_xpos[
     :2
 ].copy()
 
+DOCKING_DISTANCE = 0.30
+
+goal = np.array([
+    MARKER_POSITION[0] - DOCKING_DISTANCE,
+    MARKER_POSITION[1],
+    0.0,
+])
+
 print(
     "Known marker position:",
     MARKER_POSITION
@@ -392,17 +418,25 @@ parameters = TerminalParameters(
     sample_time=DT
 )
 
-goal = reference(
-    TRAJECTORY_NAME,
-    DURATION,
-).pose.copy()
+DOCKING_DISTANCE = 0.30
+
+goal = np.array([
+    MARKER_POSITION[0] - DOCKING_DISTANCE,
+    MARKER_POSITION[1],
+    0.0,
+])
+
+print(
+    "Docking goal:",
+    goal
+)
 
 
 def supervisor_factory():
 
-    return TrajectoryTerminalController(
-        goal=goal,
-        end_time=DURATION,
+    return StagedTrajectoryTerminalController(
+        goal,
+        DURATION,
         parameters=parameters,
     )
 
@@ -614,7 +648,8 @@ try:
         AVOID_DISTANCE = 0.4
 
         avoidance_active = (
-            obstacle_distance < AVOID_DISTANCE
+            state_time < DURATION
+            and obstacle_distance < AVOID_DISTANCE
         )
 
 
@@ -720,9 +755,27 @@ try:
             )
 
 
+        clearance = None
+
+        if state_time >= DURATION:
+
+            clearance = ClearanceGrant(
+                grant_id="terminal_test_clearance",
+                task_id=TASK_ID,
+                frame_id=WORLD_FRAME,
+                estimator_epoch=ESTIMATOR_EPOCH,
+                valid_from=0.0,
+                expires_at=TOTAL_DURATION + 5.0,
+                approved=True,
+                covers_terminal_manoeuvre=True,
+                revoked=False,
+            )
+
+
         result = interface.step(
             snapshot,
             reference_provider,
+            clearance=clearance,
         )
 
 
@@ -821,6 +874,19 @@ try:
         )
 
 
+        # ---------------------------------------------------- #
+        # 11. CHECK FOR COMPLETED DOCKING
+        # ---------------------------------------------------- #
+
+        if result.estimated_stop_qualified:
+
+            print(
+                "\nDocking stop qualified."
+            )
+
+            break
+
+
 finally:
 
     stop_result = interface.disarm(
@@ -910,12 +976,24 @@ localisation_heading_rmse = np.sqrt(
 
 
 # ============================================================ #
-#                      TRACKING ERROR                          #
+#                    NAVIGATION METRICS                        #
 # ============================================================ #
 
+tracking_samples = int(
+    DURATION / DT
+)
+
+tracking_true = true_history[
+    :tracking_samples
+]
+
+tracking_reference = reference_history[
+    :tracking_samples
+]
+
 tracking_error = (
-    reference_history
-    - true_history
+    tracking_reference
+    - tracking_true
 )
 
 tracking_error[:, 2] = np.array([
@@ -936,8 +1014,53 @@ tracking_heading_rmse = np.sqrt(
     )
 )
 
-final_position_error = np.linalg.norm(
-    tracking_error[-1, :2]
+
+# ============================================================ #
+#                       DOCKING METRICS                        #
+# ============================================================ #
+
+true_docking_error = (
+    goal
+    - true_history[-1]
+)
+
+true_docking_error[2] = wrap(
+    true_docking_error[2]
+)
+
+estimated_docking_error = (
+    goal
+    - estimate_history[-1]
+)
+
+estimated_docking_error[2] = wrap(
+    estimated_docking_error[2]
+)
+
+true_docking_position_error = np.linalg.norm(
+    true_docking_error[:2]
+)
+
+true_docking_heading_error = abs(
+    true_docking_error[2]
+)
+
+estimated_docking_position_error = np.linalg.norm(
+    estimated_docking_error[:2]
+)
+
+estimated_docking_heading_error = abs(
+    estimated_docking_error[2]
+)
+
+docking_samples = (
+    len(true_history)
+    - tracking_samples
+)
+
+docking_duration = (
+    docking_samples
+    * DT
 )
 
 
@@ -954,8 +1077,13 @@ print(
     f"{len(true_history)}/{STEPS}"
 )
 
+
+# ============================================================ #
+#                     LOCALISATION RESULTS                     #
+# ============================================================ #
+
 print(
-    "\nLocalisation:"
+    "\n---------------- LOCALISATION ----------------"
 )
 
 print(
@@ -968,8 +1096,13 @@ print(
     f"{np.rad2deg(localisation_heading_rmse):.2f} deg"
 )
 
+
+# ============================================================ #
+#                 NAVIGATION TRACKING RESULTS                  #
+# ============================================================ #
+
 print(
-    "\nTracking:"
+    "\n------------- NAVIGATION TRACKING -------------"
 )
 
 print(
@@ -982,13 +1115,52 @@ print(
     f"{np.rad2deg(tracking_heading_rmse):.2f} deg"
 )
 
+
+# ============================================================ #
+#                       DOCKING RESULTS                        #
+# ============================================================ #
+
 print(
-    f"Final position error: "
-    f"{final_position_error:.4f} m"
+    "\n------------------ DOCKING -------------------"
 )
 
 print(
-    "\nCamera:"
+    f"Goal pose: "
+    f"{goal}"
+)
+
+print(
+    f"True final position error: "
+    f"{true_docking_position_error:.4f} m"
+)
+
+print(
+    f"True final heading error: "
+    f"{np.rad2deg(true_docking_heading_error):.2f} deg"
+)
+
+print(
+    f"Estimated final position error: "
+    f"{estimated_docking_position_error:.4f} m"
+)
+
+print(
+    f"Estimated final heading error: "
+    f"{np.rad2deg(estimated_docking_heading_error):.2f} deg"
+)
+
+print(
+    f"Docking duration: "
+    f"{docking_duration:.2f} s"
+)
+
+
+# ============================================================ #
+#                    SENSOR RESULTS                            #
+# ============================================================ #
+
+print(
+    "\n------------------- CAMERA -------------------"
 )
 
 print(
@@ -997,43 +1169,9 @@ print(
     f"/{len(camera_visible_history)}"
 )
 
-print(
-    "\nFinal controller mode:"
-)
 
 print(
-    controller_mode_history[-1]
-)
-
-print(
-    "\nFinal reference pose:"
-)
-
-print(
-    reference_history[-1]
-)
-
-print(
-    "\nFinal true pose:"
-)
-
-print(
-    true_history[-1]
-)
-
-print(
-    "\nFinal EKF pose:"
-)
-
-print(
-    estimate_history[-1]
-)
-
-
-#============ Closest Obstacle =============#
-
-print(
-    "\nLiDAR:"
+    "\n-------------------- LIDAR -------------------"
 )
 
 finite_mask = np.isfinite(
@@ -1070,11 +1208,49 @@ else:
         "No front obstacles detected."
     )
 
+
 print(
-    "\nObstacle avoidance:"
+    f"Obstacle avoidance active samples: "
+    f"{np.sum(avoidance_history)}"
+)
+
+
+# ============================================================ #
+#                    FINAL SYSTEM STATE                        #
+# ============================================================ #
+
+print(
+    "\n--------------- FINAL SYSTEM STATE ---------------"
 )
 
 print(
-    f"Active samples: "
-    f"{np.sum(avoidance_history)}"
+    "Final navigation reference:"
+)
+
+print(
+    reference_history[-1]
+)
+
+print(
+    "Docking goal:"
+)
+
+print(
+    goal
+)
+
+print(
+    "Final true pose:"
+)
+
+print(
+    true_history[-1]
+)
+
+print(
+    "Final EKF pose:"
+)
+
+print(
+    estimate_history[-1]
 )
