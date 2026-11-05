@@ -124,6 +124,37 @@ class GeometryAndProvenanceTests(unittest.TestCase):
             Evaluation(0,.05,(0,0,0)),[],(2,3))
 
 
+class InnovationDiagnosticsTests(unittest.TestCase):
+    def test_known_nis_wrapping_and_no_mutation(self):
+        from integration.tests.validate_localisation import innovation_diagnostics
+        ekf=TurtleBotEKF([0,0,0],np.zeros((3,3)),np.zeros((3,3)),np.diag([.25,.04]))
+        before=ekf.state.copy();p=ekf.P.copy()
+        expected=camera_model(ekf.state,[1.,0.])
+        value=innovation_diagnostics(ekf,expected+[.5,2*np.pi+.2],[1.,0.],[0.,0.],0.)
+        assert_allclose(value['innovation'],[.5,.2],atol=1e-14)
+        self.assertAlmostEqual(value['nis'],2.)
+        self.assertEqual(value['nis_status'],'valid')
+        assert_allclose(ekf.state,before);assert_allclose(ekf.P,p)
+
+    def test_missing_singular_and_indefinite_covariance(self):
+        from integration.tests.validate_localisation import innovation_diagnostics
+        for covariance in (None,np.zeros((3,3)),-np.eye(3)):
+            ekf=SimpleNamespace(state=np.zeros(3),P=covariance,R=np.zeros((2,2)))
+            value=innovation_diagnostics(ekf,[1.,0.],[1.,0.],[0.,0.],0.)
+            self.assertIsNone(value['nis']);self.assertEqual(value['nis_status'],'invalid_covariance')
+
+    def test_update_provenance_and_dropout_status(self):
+        bank=FilterBank(metadata(),marker_faces())
+        output=bank.advance(packet(),[observation()],(0.,1.))
+        corrected=output['prior0_all_drop0_geom']['updates'][0]
+        self.assertEqual(corrected['status'],'corrected')
+        self.assertEqual(corrected['acquisition_monotonic'],10.)
+        self.assertEqual(corrected['sequence'],0);self.assertEqual(corrected['epoch'],'test')
+        self.assertGreaterEqual(corrected['processing_finished_monotonic'],corrected['processing_started_monotonic'])
+        self.assertEqual(output['prior0_all_drop1_geom']['updates'][0]['status'],'dropout')
+        self.assertNotIn('evaluation_error_m_m_rad',output['prior0_all_drop0_geom'])
+
+
 class FilterAndMetricTests(unittest.TestCase):
     def test_marker_identity_two_landmark_correction_and_missing_data(self):
         bank=FilterBank(metadata(),marker_faces())

@@ -190,11 +190,19 @@
         conaffinity="0"
       />
 
-      <!-- ArUco marker -->
+      <!-- Marker 0 visibility revision: only height changes; original local
+           position -0.056 0 0.15, revised -0.056 0 1.20. Both obstacles,
+           camera, robot start and station/pad X/Y remain unchanged.
+           Height 1.20 is the first tested fully clear/detectable candidate;
+           lower tested heights through 1.15 remained occluded. This is a
+           stationary-visibility experiment, not validated docking geometry.
+           Byte-identical original: scene_turtlebot3_navigation_pre_face_visibility.xml
+           Original commit b8195c8ac4f61defe54da1bb07ef53a68e30e403 (scene from a0185b2)
+           Original SHA256 73f61f58ff81e9a2ecd8be1c416d6bca5d6732abc2b3faad0a826eea7b873fd2 -->
       <geom
         name="aruco_marker"
         type="box"
-        pos="-0.056 0 0.15"
+        pos="-0.056 0 1.20"
         size="0.005 0.10 0.10"
         material="aruco_material_0"
         contype="0"

@@ -188,6 +188,30 @@ def detect(packet,metadata):
     return observations,rejected
 
 
+def innovation_diagnostics(ekf, measurement, landmark, camera_offset, camera_yaw):
+    """Pre-update diagnostics only; no gating and no filter mutation.
+
+    NIS is undefined for missing, nonfinite, asymmetric or non-positive-definite S.
+    A failed diagnostic does not silently repair covariance or reject a correction.
+    """
+    z=np.asarray(measurement,float).reshape(2)
+    expected=camera_model(ekf.state,landmark,camera_offset,camera_yaw)
+    h=camera_jacobian(ekf.state,landmark,camera_offset,camera_yaw)
+    residual=z-expected;residual[1]=wrap(residual[1])
+    covariance=None;nis=None;status='invalid_covariance'
+    try:
+        covariance=h@np.asarray(ekf.P,float)@h.T+np.asarray(ekf.R,float)
+        if (covariance.shape==(2,2) and np.isfinite(covariance).all()
+                and np.isfinite(residual).all()
+                and np.allclose(covariance,covariance.T,rtol=0,atol=1e-12)):
+            chol=np.linalg.cholesky(covariance)
+            whitened=np.linalg.solve(chol,residual)
+            nis=float(whitened@whitened);status='valid'
+    except (ValueError,TypeError,np.linalg.LinAlgError):pass
+    return dict(innovation=residual.tolist(),innovation_covariance=None if covariance is None else covariance.tolist(),
+                nis=nis,nis_status=status,units=['m','rad'])
+
+
 class FilterBank:
     """Feedback boundary: no Evaluation parameter or access to owner/scoring channel."""
     def __init__(self,metadata,faces):
@@ -233,19 +257,31 @@ class FilterBank:
             predicted=ekf.state.copy()
             selected=observations[:1] if mode=='first' else observations
             if dropout and round(dropout_window[0]/DT)<=packet.sequence+1<round(dropout_window[1]/DT):selected=[]
-            nises=[];ids=[]
+            nises=[];ids=[];updates=[]
+            selected_ids={o.marker_id for o in selected}
+            for obs in observations:
+                if obs.marker_id not in selected_ids:
+                    updates.append(dict(marker_id=obs.marker_id,status="dropout" if dropout and round(dropout_window[0]/DT)<=packet.sequence+1<round(dropout_window[1]/DT) else "not_selected",
+                        acquisition_monotonic=obs.acquisition_monotonic,sequence=obs.sequence,epoch=obs.epoch))
             for obs in selected:
                 z=np.asarray(obs.bearing_range);landmark=self.maps[map_mode][obs.marker_id]
-                expected=camera_model(ekf.state,landmark,self.metadata['camera_offset'],self.metadata['camera_yaw'])
-                h=camera_jacobian(ekf.state,landmark,self.metadata['camera_offset'],self.metadata['camera_yaw'])
-                residual=z-expected;residual[1]=wrap(residual[1])
-                nises.append(float(residual@np.linalg.solve(h@ekf.P@h.T+ekf.R,residual)))
-                ekf.update_camera(z,landmark,self.metadata['camera_offset'],self.metadata['camera_yaw'])
+                diagnostic=innovation_diagnostics(ekf,z,landmark,self.metadata['camera_offset'],self.metadata['camera_yaw'])
+                started=time.monotonic()
+                try:
+                    ekf.update_camera(z,landmark,self.metadata['camera_offset'],self.metadata['camera_yaw'])
+                except Exception as exc:
+                    updates.append(dict(marker_id=obs.marker_id,status='failed',error=type(exc).__name__,**diagnostic))
+                    raise
+                updates.append(dict(marker_id=obs.marker_id,status='corrected',
+                    acquisition_monotonic=obs.acquisition_monotonic,sequence=obs.sequence,epoch=obs.epoch,
+                    processing_started_monotonic=started,processing_finished_monotonic=time.monotonic(),**diagnostic))
+                if diagnostic['nis'] is not None:nises.append(diagnostic['nis'])
                 ids.append(obs.marker_id)
             if not np.isfinite(ekf.state).all() or not np.isfinite(ekf.P).all():
                 raise ValueError('EKF numerical failure')
             result[name]=dict(pose=ekf.state.tolist(),predicted_pose=predicted.tolist(),
-                              covariance=ekf.P.tolist(),correction_ids=ids,nis=nises)
+                              covariance=ekf.P.tolist(),correction_ids=ids,nis=nises,updates=updates,
+                              camera_available=bool(observations))
         self.previous=packet
         return result
 
@@ -344,7 +380,7 @@ def summarise(rows,geometry):
                 finish_age_s={q:float(np.percentile(ages,p)) for q,p in [('median',50),('p95',95),('max',100)]} if ages else {})
 
 
-def run_plan(plan):
+def run_plan(plan, frame_sink=None):
     faces=marker_faces();rows=[];geometry=[];error=None;last_lease=None;records=[]
     packet=None;failure_sample=None
     config=OwnerConfig(render_camera=True,max_runtime_s=plan.duration+8.,epoch='validation-'+str(time.monotonic_ns()))
@@ -355,6 +391,7 @@ def run_plan(plan):
             for index in range(round(plan.duration/DT)):
                 packet=owner.next_measurement();received=time.monotonic()
                 observations,rejected=detect(packet,owner.metadata)
+                detected=time.monotonic()
                 filters=bank.advance(packet,observations,plan.dropout)
                 finished=time.monotonic()
                 # Command program depends ONLY on predeclared time/plan, never an estimate/truth.
@@ -380,10 +417,23 @@ def run_plan(plan):
                     if candidate.sequence>packet.sequence:raise ValueError('Evaluation channel skipped required sequence')
                 scored=[] if evaluation is None else score_geometry(observations,evaluation,faces)
                 geometry.extend(scored)
+                # Evaluation errors are attached only AFTER all filter updates and commands.
+                if evaluation is not None:
+                    for value in filters.values():
+                        error_pose=np.asarray(value['pose'])-np.asarray(evaluation.pose)
+                        error_pose[2]=wrap(error_pose[2])
+                        value['evaluation_error_m_m_rad']=error_pose.tolist()
+                if frame_sink is not None:
+                    frame_sink(packet,dict(observed_ids=[o.marker_id for o in observations],
+                        estimate=filters['prior0_all_drop0_geom']['pose'],motion='stationary zero-only' if plan.name=='stationary' else 'prescribed'))
                 rows.append(dict(sequence=packet.sequence,state_time=packet.state_time,
                     acquisition_monotonic=packet.sample_monotonic,receive_age=received-packet.sample_monotonic,
                     finish_age=finished-packet.sample_monotonic,observed_ids=[o.marker_id for o in observations],
                     rejected_ids=rejected,filters=filters,
+                    received_monotonic=received,processing_finished_monotonic=finished,
+                    detection_duration_s=detected-received,filter_duration_s=finished-detected,
+                    rendering_duration_s=None, # owner does not publish render start/end
+                    camera_frame_available=packet.rgb is not None,
                     truth=None if evaluation is None else list(evaluation.pose)))
         except Exception as exc:
             error=type(exc).__name__+': '+str(exc)
@@ -418,7 +468,12 @@ def run_plan(plan):
             telemetry_max_interval_s=float(max(np.diff([v['wall'] for v in statuses]))) if len(statuses)>1 else None,
             receive_age_max_s=max((r['receive_age'] for r in rows),default=None),
             physics_dt=owner.metadata['physics_dt'],image_size=list(packet.rgb.shape[1::-1]) if rows else None,
-            quality_authorised=False,lqr_enabled=False)
+            quality_authorised=False,lqr_enabled=False,
+            all_recorded_writes_zero=all(v['requested']==[0.,0.] for kind,v in records if kind=='write'),
+            successful_zero_writes=sum(kind=='write' and v['success'] and v['requested']==[0.,0.] for kind,v in records),
+            rendering_duration_available=False,
+            processing_duration_s={name:max((row[name] for row in rows),default=None)
+                for name in ('detection_duration_s','filter_duration_s')})
         detail=dict(rows=rows,geometry=geometry,owner_records=records)
     if owner.error:
         result['owner_error']=owner.error;result['stop_confirmed']=False;result['completed']=False

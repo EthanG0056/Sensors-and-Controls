@@ -108,6 +108,27 @@ def _offer(channel, item):
         return False
 
 
+def marker_face_metadata(model, data):
+    """Configured negative-local-X printed faces, transformed fully into world.
+
+    Camera observations are camera-origin range/bearing to these points. No
+    camera/body offset belongs in the landmark map; EKF models it separately.
+    Call only in the simulation owner (independent fixtures may call in tests).
+    """
+    result={}
+    for identity,name in ((0,'aruco_marker'),(1,'aruco_marker_1')):
+        gid=model.geom(name).id
+        if model.geom_type[gid] != mujoco.mjtGeom.mjGEOM_BOX:
+            raise ValueError('Mapped marker must be a box with a negative-X printed face')
+        centre=np.asarray(data.geom_xpos[gid],float)
+        normal=-np.asarray(data.geom_xmat[gid],float).reshape(3,3)[:,0]
+        face=centre+model.geom_size[gid,0]*normal
+        if not np.isfinite(face).all() or model.geom_size[gid,0]<=0:
+            raise ValueError('Invalid marker face geometry')
+        result[identity]=dict(centre=centre.tolist(),face=face.tolist(),normal=normal.tolist())
+    return result
+
+
 def run_owner(connection, measurements, evaluations, events, config, pause, fail_write):
     """Entry point only; test events pause physics or inject a labelled writer fault."""
     gateway = renderer = None
@@ -134,8 +155,8 @@ def run_owner(connection, measurements, evaluations, events, config, pause, fail
         forward = -rotation.reshape(3, 3)[:, 2]
         if abs(forward[2]) > 1e-8:
             raise ValueError('Planar EKF camera model requires a level camera')
-        landmarks = {i: data.geom_xpos[model.geom(n).id, :2].tolist()
-                     for i, n in [(0, 'aruco_marker'), (1, 'aruco_marker_1')]}
+        face_metadata = marker_face_metadata(model, data)
+        landmarks = {i: value['face'][:2] for i,value in face_metadata.items()}
         sizes = {i: float(2*model.geom_size[model.geom(n).id, 1])
                  for i, n in [(0, 'aruco_marker'), (1, 'aruco_marker_1')]}
         adr = int(model.jnt_qposadr[model.joint('base_joint').id])
@@ -162,7 +183,7 @@ def run_owner(connection, measurements, evaluations, events, config, pause, fail
             renderer = mujoco.Renderer(model, height=height, width=width)
             renderer._scene_option.flags[mujoco.mjtVisFlag.mjVIS_RANGEFINDER] = False
         _offer(events, ('ready', dict(owner_pid=os.getpid(), physics_dt=dt,
-            sample_time=config.sample_time, landmarks=landmarks, marker_sizes=sizes,
+            sample_time=config.sample_time, landmarks=landmarks, landmark_faces=face_metadata, marker_sizes=sizes,
             camera_matrix=k, camera_offset=model.cam_pos[camera, :2].tolist(),
             camera_yaw=float(np.arctan2(forward[1], forward[0])), epoch=config.epoch)))
         start = next_step = time.monotonic()

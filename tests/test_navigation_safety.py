@@ -51,6 +51,42 @@ def session(capacity=64):
     return OwnerSession(OwnerConfig(render_camera=False,queue_capacity=capacity,max_runtime_s=10.))
 
 
+class MarkerFaceMapTests(unittest.TestCase):
+    def test_face_map_ids_orientation_and_camera_offset_separation(self):
+        import mujoco
+        from integration.mujoco_owner import SCENE, marker_face_metadata
+        from integration.tests.validate_localisation import marker_faces
+        from estimation.ekf import camera_model
+        model=mujoco.MjModel.from_xml_path(str(SCENE));data=mujoco.MjData(model)
+        mujoco.mj_forward(model,data)
+        actual=marker_face_metadata(model,data);expected=marker_faces()
+        self.assertEqual(set(actual),{0,1})
+        for identity in (0,1):
+            np.testing.assert_allclose(actual[identity]['face'],expected[identity]['face'],atol=1e-12)
+            np.testing.assert_allclose(actual[identity]['normal'],expected[identity]['normal'],atol=1e-12)
+            self.assertGreater(np.linalg.norm(np.asarray(actual[identity]['face'])-actual[identity]['centre']),0)
+        camera=model.camera('front_camera').id
+        np.testing.assert_allclose(model.cam_pos[camera],[.05,0,.12])
+        point=np.asarray(actual[1]['face'][:2])
+        expected_range=np.linalg.norm(point-np.array([.05,0.]))
+        self.assertAlmostEqual(camera_model(np.zeros(3),point,[.05,0.],0.)[0],expected_range)
+        # No camera subtraction in the world landmark: that would apply it twice.
+        np.testing.assert_allclose(point,expected[1]['face'][:2])
+        gid=model.geom('aruco_marker').id
+        angle=.4;axes=np.array([[np.cos(angle),-np.sin(angle),0],[np.sin(angle),np.cos(angle),0],[0,0,1.]])
+        data.geom_xmat[gid]=axes.ravel()
+        rotated=marker_face_metadata(model,data)[0]
+        np.testing.assert_allclose(rotated['face'],data.geom_xpos[gid]-model.geom_size[gid,0]*axes[:,0])
+
+    def test_live_owner_publishes_face_map_not_box_centres(self):
+        with session() as owner:
+            self.assertEqual(set(owner.metadata['landmarks']),{0,1})
+            for identity,point in owner.metadata['landmarks'].items():
+                info=owner.metadata['landmark_faces'][identity]
+                np.testing.assert_allclose(point,info['face'][:2])
+                self.assertFalse(np.array_equal(point,info['centre'][:2]))
+
+
 class LocalisationPolicyTests(unittest.TestCase):
     def test_no_policy_never_authorises_motion(self):
         result=policy(False).assess(pose(),previous=None,expected_time=.05,now=10.01,
