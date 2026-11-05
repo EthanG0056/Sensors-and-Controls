@@ -6,7 +6,7 @@ Group 23:
 
 - Ethan Griffiths (25364771)
 - Lachlan Taylor (25992569)
-- Arnoe Kruger (student id)
+- Arnoe Kruger (25477389)
 
 ## Part A: Modelling
 
@@ -78,7 +78,26 @@ leases. Related interface and gateway checks are in
 
 **Arnoe Kruger:**
 
-put something here
+Mathematical Modelling (Part A):
+-TurtleBot3 Burger differential-drive kinematic modelling
+-MuJoCo drive-response identification and parameter estimation
+-Model verification, held-out validation and actuator gain comparisons
+-Controllability and observability analysis
+
+Control (Part D):
+-Discrete-time LQR trajectory-tracking controller
+-Trajectory generation and reference tracking
+-LQR tuning, simulation benchmarking and performance evaluation
+-Hybrid terminal controller and staged goal-pose positioning
+-Terminal accuracy and robustness testing
+
+System Integration and Validation:
+-EKF measured-wheel odometry adapter and timestamped pose snapshots
+-Estimated-pose validation and controller interface
+-Wheel-command gateway, command expiry and fault handling
+-MuJoCo actuator integration and independent simulation/actuator ownership
+-Localisation validation and integration safety testing
+-Reproducible experimental results and verification tests
 
 ## Generative AI declaration
 
