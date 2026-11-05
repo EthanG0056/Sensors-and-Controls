@@ -3,9 +3,10 @@
 
 Repository for Integrated Project.
 Group 23:
-    Ethan Griffiths
-    Lachlan Taylor
-    Arnoe Kruger
+
+- Ethan Griffiths (25364771)
+- Lachlan Taylor (student id)
+- Arnoe Kruger (student id)
 
 ## Part A: Modelling
 
