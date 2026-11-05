@@ -90,6 +90,25 @@ class EstimatedPoseInterfaceTests(unittest.TestCase):
         self.assertIsNone(self.interface.supervisor)
         self.assertEqual(self.writer.writes[-1], (0., 0.))
 
+    def test_explicit_terminal_selection_and_invalid_flags(self):
+        for flag in (0, 1, "false", np.bool_(False), []):
+            self.reset_interface()
+            result = self.interface.step(self.snapshot(), self.reference, terminal_active=flag)
+            self.assert_fault(result)
+        self.reset_interface(terminal_start=12.)
+        instance = self.instances[0]
+        result = self.interface.step(self.snapshot(), self.reference, terminal_active=True)
+        self.assert_fault(result)
+        self.assertEqual(instance.calls, 0)
+        self.reset_interface(terminal_start=12.)
+        self.instances[0].action = lambda *args: (np.zeros(2), np.zeros(2), 'tracking_avoidance', False)
+        result = self.interface.step(self.snapshot(), self.reference, terminal_active=False)
+        self.assertTrue(result.accepted)
+        self.reset_interface(terminal_start=12.)
+        self.instances[0].action = lambda *args: (np.zeros(2), np.zeros(2), 'coast', False)
+        self.assertTrue(self.interface.step(self.snapshot(), self.reference,
+            clearance=self.grant(), terminal_active=True).accepted)
+
     def test_snapshot_is_a_detached_immutable_copy(self):
         pose = np.zeros(3); covariance = np.eye(3)*1e-4
         snapshot = self.snapshot(pose=pose, covariance=covariance)

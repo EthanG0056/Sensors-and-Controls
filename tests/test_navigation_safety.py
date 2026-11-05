@@ -234,6 +234,34 @@ class OwnerFailureAndInterfaceTests(unittest.TestCase):
                 self.assertFalse(interface.armed)
                 self.assertEqual(result.receipt.applied_wheels,(0.,0.))
 
+    def test_navigation_stop_request_does_not_invoke_controller(self):
+        with session() as owner:
+            owner.next_measurement()
+            interface=self.make_interface(owner)
+            interface.arm(epoch='fixture',state_time_origin=.05)
+            supervisor=interface.supervisor
+            result=dispatch(interface,pose(localisation_valid=True),
+                lambda t:reference('straight',t),relative_time=0.,
+                stop_reason='terminal_clearance_unavailable')
+            self.assertTrue(result.zero_dispatch_confirmed)
+            self.assertFalse(supervisor.terminal.started)
+            self.assertEqual(result.reason,'terminal_clearance_unavailable')
+
+    def test_both_camera_ids_are_associated_from_detached_images(self):
+        from unittest.mock import patch
+        from integration.main import camera_observation
+        packet=Measurement([0.,0.],np.ones(2),np.zeros((4,4,3),np.uint8),.05,1.,0,'fixture')
+        metadata=dict(landmarks={0:[2.,.4],1:[1.,-.2]},marker_sizes={0:.2,1:.2},camera_matrix=np.eye(3))
+        for marker_id in (0,1):
+            with patch('integration.main.detect_aruco_marker',return_value=(marker_id,np.zeros((4,2)))), \
+                 patch('integration.main.estimate_marker_pose',return_value=(np.array([0.,0.,1.]),None)):
+                identified,measurement,landmark=camera_observation(packet,metadata)
+                self.assertEqual(identified,marker_id)
+                np.testing.assert_array_equal(landmark,metadata['landmarks'][marker_id])
+                self.assertEqual(measurement.shape,(2,1))
+        with patch('integration.main.detect_aruco_marker',return_value=(99,np.zeros((4,2)))):
+            with self.assertRaises(ValueError): camera_observation(packet,metadata)
+
     def test_unknown_clearance_and_end_of_trajectory_never_start_staging(self):
         with session() as owner:
             owner.next_measurement()

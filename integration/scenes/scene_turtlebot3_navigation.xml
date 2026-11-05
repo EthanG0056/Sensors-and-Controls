@@ -11,7 +11,7 @@
   <!--                       SCENE SETTINGS                         -->
   <!-- ============================================================ -->
 
-  <statistic center="0.8 0 0.4" extent="2"/>
+  <statistic center="1.5 0 0.4" extent="2.5"/>
 
   <visual>
 
@@ -55,9 +55,9 @@
       name="groundplane"
       builtin="checker"
       mark="edge"
-      rgb1="0.2 0.3 0.4"
-      rgb2="0.1 0.2 0.3"
-      markrgb="0.8 0.8 0.8"
+      rgb1="0.30 0.30 0.32"
+      rgb2="0.42 0.42 0.45"
+      markrgb="0.65 0.65 0.68"
       width="300"
       height="300"
     />
@@ -66,8 +66,8 @@
       name="groundplane"
       texture="groundplane"
       texuniform="true"
-      texrepeat="5 5"
-      reflectance="0.2"
+      texrepeat="8 8"
+      reflectance="0.05"
     />
 
     <!-- ArUco Marker 0 Texture -->
@@ -83,7 +83,6 @@
       texrepeat="1 1"
       texuniform="false"
     />
-
 
     <!-- ArUco Marker 1 Texture -->
     <texture
@@ -125,10 +124,51 @@
 
 
     <!-- ======================================================== -->
+    <!--                         ROOM WALLS                       -->
+    <!-- ======================================================== -->
+
+    <!-- Rear wall -->
+    <geom
+      name="rear_wall"
+      type="box"
+      pos="-0.40 0 0.30"
+      size="0.05 1.50 0.30"
+      rgba="0.82 0.82 0.84 1"
+    />
+
+    <!-- Left wall -->
+    <geom
+      name="left_wall"
+      type="box"
+      pos="1.20 1.50 0.30"
+      size="1.60 0.05 0.30"
+      rgba="0.82 0.82 0.84 1"
+    />
+
+    <!-- Right wall -->
+    <geom
+      name="right_wall"
+      type="box"
+      pos="1.20 -1.10 0.30"
+      size="1.60 0.05 0.30"
+      rgba="0.82 0.82 0.84 1"
+    />
+
+    <!-- Far wall -->
+    <geom
+      name="front_wall"
+      type="box"
+      pos="2.80 0 0.30"
+      size="0.05 1.50 0.30"
+      rgba="0.82 0.82 0.84 1"
+    />
+
+
+    <!-- ======================================================== -->
     <!--                    CHARGING STATION                      -->
     <!-- ======================================================== -->
 
-    <body name="charging_station" pos="2.0 0 0">
+    <body name="charging_station" pos="2.68 0.4 0">
 
       <!-- Station body -->
       <geom
@@ -137,6 +177,17 @@
         pos="0 0 0.15"
         size="0.05 0.18 0.15"
         rgba="0.25 0.25 0.25 1"
+      />
+
+      <!-- Charging pad -->
+      <geom
+        name="charging_pad"
+        type="box"
+        pos="-0.22 0 0.006"
+        size="0.16 0.18 0.006"
+        rgba="0.10 0.35 0.15 1"
+        contype="0"
+        conaffinity="0"
       />
 
       <!-- ArUco marker -->
@@ -154,17 +205,38 @@
 
 
     <!-- ======================================================== -->
-    <!--                     ARUCO LANDMARK 1                     -->
+    <!--                         OBSTACLE                         -->
     <!-- ======================================================== -->
 
+    <!-- Obstacle 1 -->
+    <geom
+      name="obstacle_1"
+      type="box"
+      pos="0.6 0.15 0.15"
+      size="0.075 0.075 0.15"
+      rgba="0.75 0.20 0.20 1"
+    />
+
+    <!-- Obstacle 2 with relative ArUco marker -->
     <body
-      name="aruco_landmark_1"
-      pos="1.05 0 0.38"
+      name="obstacle_2_body"
+      pos="1.35 -0.2 0"
     >
 
+      <!-- Obstacle 2 -->
+      <geom
+        name="obstacle_2"
+        type="box"
+        pos="0 0 0.15"
+        size="0.12 0.12 0.15"
+        rgba="0.80 0.45 0.15 1"
+      />
+
+      <!-- ArUco marker 1 -->
       <geom
         name="aruco_marker_1"
         type="box"
+        pos="-0.135 0 0.20"
         size="0.005 0.10 0.10"
         material="aruco_material_1"
         contype="0"
@@ -173,18 +245,6 @@
 
     </body>
 
-
-    <!-- ======================================================== -->
-    <!--                         OBSTACLE                         -->
-    <!-- ======================================================== -->
-
-    <geom
-      name="test_obstacle"
-      type="box"
-      pos="0.7 0.3 0.15"
-      size="0.15 0.15 0.15"
-      rgba="0.8 0.2 0.2 1"
-    />
 
   </worldbody>
 

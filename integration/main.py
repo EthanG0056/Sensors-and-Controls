@@ -29,6 +29,7 @@ from control.staged_terminal_controller import StagedTrajectoryTerminalControlle
 from control.trajectory import reference, DURATIONS
 from integration.mujoco_owner import OwnerConfig, OwnerSession, Measurement
 from integration.localisation_policy import LocalisationPolicy
+from integration.navigation_supervisor import NavigationSupervisor
 
 DT = .05
 TRAJECTORY_NAME = 'straight'
@@ -57,27 +58,19 @@ def camera_observation(packet, metadata):
     return marker_id, measurement, np.asarray(metadata['landmarks'][marker_id])
 
 
-def reference_for_obstacle(pose, relative_time, obstacle):
-    """Preserve the team's diagnostic detour heuristic; NOT swept-path planning."""
-    normal = reference(TRAJECTORY_NAME, relative_time)
-    if obstacle is None or obstacle[0] >= .4:
-        return normal
-    theta = pose[2]
-    forward = np.array([np.cos(theta), np.sin(theta)])
-    left = np.array([-np.sin(theta), np.cos(theta)])
-    sign = -1 if obstacle[1] > 0 else 1
-    xy = pose[:2]+.25*forward+sign*.20*left
-    heading = wrap(theta+sign*np.deg2rad(20))
-    return type(normal)(pose=np.r_[xy,heading], input=np.array([.05,0.]))
+def dispatch(interface, snapshot, reference_provider, *, relative_time, stop_reason=None):
+    """No grant is manufactured; navigation requests stop before terminal invocation.
 
-
-def dispatch(interface, snapshot, reference_provider, *, relative_time):
-    """No grant is manufactured. Stop before the scheduled terminal handoff."""
+    relative_time retains the legacy dispatch cutoff for existing callers.
+    Navigation uses its explicit stop request and tracking-only supervisor.
+    """
+    if stop_reason is not None:
+        return interface.disarm(stop_reason)
     if relative_time >= DURATION:
         return interface.disarm('trajectory_complete; terminal_clearance_unavailable')
     if snapshot.localisation_valid is not True:
         return interface.disarm('localisation_invalid: '+snapshot.validity_reason)
-    return interface.step(snapshot, reference_provider, clearance=None)
+    return interface.step(snapshot, reference_provider, clearance=None, terminal_active=False)
 
 
 def run(*, criteria=None, render_camera=True, max_samples=None):
@@ -86,27 +79,30 @@ def run(*, criteria=None, render_camera=True, max_samples=None):
     Q/R/prior below retain team diagnostic settings, not calibrated uncertainty.
     Strict 20 Hz slots fail closed on delay/overflow; no catch-up/relabelled samples.
     """
-    if max_samples is None: max_samples = round(DURATION/DT)+1
+    if max_samples is None: max_samples = round(57./DT)
     if type(max_samples) is not int or max_samples < 1:
         raise ValueError('Positive sample count required')
     epoch = 'navigation-'+str(time.monotonic_ns())
     config = OwnerConfig(sample_time=DT, max_lease_s=MAX_LEASE_S,
                          render_camera=render_camera, epoch=epoch,
-                         max_runtime_s=DURATION+10.)
+                         max_runtime_s=70.)
     history, reasons, marker_counts = [], [], {0:0,1:0}
     final_stop = None
     with OwnerSession(config) as owner:
         metadata = owner.metadata
         # Static map metadata is configuration, never an observed robot truth pose.
-        goal = np.array([metadata['landmarks'][0][0]-.30, metadata['landmarks'][0][1], 0.])
+        goal = np.array([metadata['landmarks'][0][0]-.10, metadata['landmarks'][0][1], 0.])
         parameters = TerminalParameters(sample_time=DT)
         quality = LocalisationPolicy(epoch,WORLD_FRAME,BODY_FRAME,DT,MAX_AGE_S,
                                       GRID_TOLERANCE_S,criteria)
         policy = InterfacePolicy(WORLD_FRAME,BODY_FRAME,MAX_AGE_S,COMMAND_TTL_S,
             GRID_TOLERANCE_S, criteria.accepts if criteria else lambda previous,current:False,
             sample_time=DT)
+        supervisor = NavigationSupervisor(
+            StagedTrajectoryTerminalController(goal,DURATION,parameters),
+            metadata['landmarks'][0], DT)
         interface = EstimatedPoseInterface(owner.client,
-            lambda:StagedTrajectoryTerminalController(goal,DURATION,parameters),
+            lambda:supervisor,
             policy,goal=goal,task_id=TASK_ID,terminal_start_s=DURATION,
             parameters=parameters,clock=time.monotonic)
         ekf = TurtleBotEKF([0.,0.,0.], np.diag([.05**2,.05**2,np.deg2rad(5)**2]),
@@ -157,12 +153,13 @@ def run(*, criteria=None, render_camera=True, max_samples=None):
                 # Truth is fetched ONLY for scoring, never passed to policy/EKF/reference.
                 evaluation = owner.evaluation(packet.sequence)
                 obstacle = get_front_obstacle(packet.lidar)
-                relative_time = index*DT
+                supervisor.update(snapshot.pose, obstacle, packet.state_time)
+                relative_time = supervisor.navigation_time
                 row = dict(sequence=index,state_time=packet.state_time,
                     acquisition_monotonic=packet.sample_monotonic,estimate=snapshot.pose.copy(),
                     covariance=snapshot.covariance.copy(),valid=decision.valid,
                     camera_status=camera_status,obstacle=obstacle,
-                    reference=reference(TRAJECTORY_NAME,relative_time).pose.copy(),
+                    reference=supervisor.reference(relative_time).pose.copy(),
                     truth=None if evaluation is None else evaluation.pose)
                 history.append(row)
                 if snapshot.localisation_valid and not arm_attempted:
@@ -172,7 +169,7 @@ def run(*, criteria=None, render_camera=True, max_samples=None):
                         reasons.append(armed.reason)
                         break
                 result = dispatch(interface,snapshot,
-                    lambda t:reference_for_obstacle(snapshot.pose,t,obstacle),relative_time=relative_time)
+                    supervisor.reference,relative_time=0.,stop_reason=supervisor.stop_reason)
                 row['mode'] = result.controller_mode
                 row['reason'] = result.reason
                 if not result.accepted:

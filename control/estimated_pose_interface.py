@@ -241,7 +241,14 @@ class EstimatedPoseInterface:
         return (np.linalg.norm(snapshot.pose[:2]-self.goal[:2]) <= self.parameters.position_exit
                 and abs(wrap(snapshot.pose[2]-self.goal[2])) <= self.parameters.heading_exit)
 
-    def step(self, estimate, reference_provider, *, clearance=None):
+    def step(
+        self,
+        estimate,
+        reference_provider,
+        *,
+        clearance=None,
+        terminal_active=None,
+    ):
         if not self.armed:
             return self.disarm('interface_not_armed')
         try:
@@ -255,7 +262,9 @@ class EstimatedPoseInterface:
             validate_estimate(snapshot, self.policy, now=now, epoch=self.epoch,
                               expected_state_time=expected, previous=self.previous)
             relative_time = self.accepted_samples*self.policy.sample_time
-            terminal = relative_time >= self.terminal_start_s
+            if terminal_active is not None and type(terminal_active) is not bool:
+                raise ValueError("invalid_terminal_active")
+            terminal = relative_time >= self.terminal_start_s if terminal_active is None else terminal_active
             if terminal:
                 self._clearance(clearance, now)  # before invoking staging or terminal law
             if self.completed and not self._at_goal(snapshot):
@@ -273,9 +282,19 @@ class EstimatedPoseInterface:
             body, wheels = np.asarray(body, float), np.asarray(wheels, float)
             if (body.shape != (2,) or wheels.shape != (2,) or not np.isfinite(body).all()
                     or not np.isfinite(wheels).all() or max(abs(wheels)) > WHEEL_LIMIT
-                    or mode not in ('tracking_lqr', 'tracking_stationary_stop', 'bearing',
-                                    'approach', 'heading', 'coast', 'stage_bearing',
-                                    'stage_approach', 'stop', 'fault')
+                    or mode not in (
+                            'tracking_lqr',
+                            'tracking_stationary_stop',
+                            'tracking_avoidance',
+                            'bearing',
+                            'approach',
+                            'heading',
+                            'coast',
+                            'stage_bearing',
+                            'stage_approach',
+                            'stop',
+                            'fault',
+                        )
                     or not isinstance(saturated, (bool, np.bool_))):
                 raise ValueError('invalid_controller_output')
             represented = np.array([.033*sum(wheels)/2, .033*(wheels[1]-wheels[0])/.160])

@@ -37,12 +37,30 @@ def observation(identity=1,k=0):
 
 class GeometryAndProvenanceTests(unittest.TestCase):
     def test_static_face_centres_and_physical_sizes(self):
+        import mujoco
+        from integration.mujoco_owner import SCENE
+        # Independent oracle: MuJoCo compiles hierarchy, geom transforms and sizes;
+        # marker_faces() instead parses XML using its own quaternion composition.
+        model=mujoco.MjModel.from_xml_path(str(SCENE))
+        data=mujoco.MjData(model)
+        mujoco.mj_forward(model,data)
         faces=marker_faces()
-        assert_allclose(faces[0]['centre'],[1.944,0,.15])
-        assert_allclose(faces[0]['face'],[1.939,0,.15])
-        assert_allclose(faces[1]['face'],[1.045,0,.38])
-        self.assertEqual(faces[0]['side'],.2)
-        self.assertEqual(faces[1]['side'],.2)
+        self.assertEqual(set(faces),{0,1})
+        for identity,name in ((0,'aruco_marker'),(1,'aruco_marker_1')):
+            gid=model.geom(name).id
+            self.assertEqual(model.geom_type[gid],mujoco.mjtGeom.mjGEOM_BOX)
+            half=model.geom_size[gid]
+            centre=data.geom_xpos[gid]
+            axes=data.geom_xmat[gid].reshape(3,3)
+            # The printed surface is the negative local-X face, not the box centre.
+            face=centre-half[0]*axes[:,0]
+            assert_allclose(faces[identity]['centre'],centre,rtol=0,atol=1e-12)
+            assert_allclose(faces[identity]['face'],face,rtol=0,atol=1e-12)
+            assert_allclose(faces[identity]['normal'],-axes[:,0],rtol=0,atol=1e-12)
+            self.assertGreater(half[0],0.)
+            assert_allclose(np.linalg.norm(face-centre),half[0],rtol=0,atol=1e-12)
+            assert_allclose(half[1],half[2],rtol=0,atol=1e-12)
+            assert_allclose(faces[identity]['side'],2*half[1],rtol=0,atol=1e-12)
         # Texture raster dimensions do not enter this physical geometry parser.
         self.assertNotIn('cv2',inspect.getsource(marker_faces))
 
@@ -68,12 +86,32 @@ class GeometryAndProvenanceTests(unittest.TestCase):
         with self.assertRaises(FrozenInstanceError):copy.epoch='changed'
 
     def test_provenance_required_before_scoring(self):
+        import mujoco
+        from integration.mujoco_owner import SCENE
+        model=mujoco.MjModel.from_xml_path(str(SCENE))
+        data=mujoco.MjData(model)
+        mujoco.mj_forward(model,data)
         r=np.array([[0,0,1],[-1,0,0],[0,-1,0.]])
         e=Evaluation(0,.05,(0,0,0),(.05,0,.12),r,'test',10.)
-        score=score_geometry([observation()],e,marker_faces())[0]
-        assert_allclose(score['expected_translation'],[0,-.26,.995],atol=1e-14)
-        with self.assertRaises(ValueError):score_geometry([observation()],replace(e,epoch='wrong'),marker_faces())
-        with self.assertRaises(ValueError):score_geometry([observation()],replace(e,sample_monotonic=11.),marker_faces())
+        faces=marker_faces()
+        for identity,name in ((0,'aruco_marker'),(1,'aruco_marker_1')):
+            gid=model.geom(name).id
+            face=data.geom_xpos[gid]-model.geom_size[gid,0]*data.geom_xmat[gid].reshape(3,3)[:,0]
+            # Independently project onto the known optical basis (right=-world Y,
+            # down=-world Z, forward=world X), without expected_translation().
+            delta=face-np.asarray(e.camera_world_position)
+            expected=np.array([-delta[1],-delta[2],delta[0]])
+            obs=observation(identity)
+            score=score_geometry([obs],e,faces)[0]
+            assert_allclose(score['expected_translation'],expected,rtol=0,atol=1e-12)
+            self.assertEqual(score['marker_id'],identity)
+            for changes in (dict(epoch='wrong'),dict(epoch=None),dict(sequence=1),
+                            dict(state_time=.10),dict(sample_monotonic=11.),
+                            dict(sample_monotonic=None),dict(camera_world_position=None),
+                            dict(camera_to_world_rotation=None)):
+                with self.subTest(identity=identity,changes=changes):
+                    with self.assertRaises(ValueError):
+                        score_geometry([obs],replace(e,**changes),faces)
         with self.assertRaises(ValueError):expected_translation(replace(e,camera_to_world_rotation=np.zeros((3,3))),[0,0,0])
 
     def test_truth_is_not_a_feedback_or_command_argument(self):
