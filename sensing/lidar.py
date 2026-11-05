@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Protocol
 
 import numpy as np
@@ -6,6 +7,117 @@ import open3d as o3d
 from machinevisiontoolbox import Image, CentralCamera
 from numpy.typing import NDArray
 from spatialmath import SE3
+
+
+@dataclass(frozen=True)
+class LidarCalibration:
+    """Linear range correction and optional constant angular correction."""
+
+    range_scale: float
+    range_offset_m: float
+    range_rmse_m: float
+    angle_offset_rad: float | None
+    angle_rmse_rad: float | None
+    sample_count: int
+
+    def apply_ranges(self, ranges: NDArray[np.floating]) -> NDArray[np.float64]:
+        """Apply the fitted scale and bias to a scan."""
+        scan = np.asarray(ranges, dtype=np.float64)
+        if scan.ndim != 1:
+            raise ValueError("ranges must be a one-dimensional array")
+        corrected = self.range_scale * scan + self.range_offset_m
+        corrected[~np.isfinite(scan)] = np.nan
+        return corrected
+
+    def apply_angles(self, angles: NDArray[np.floating]) -> NDArray[np.float64]:
+        """Apply the fitted angular offset, preserving wrapped angles."""
+        if self.angle_offset_rad is None:
+            raise RuntimeError("angle calibration was not included")
+        values = np.asarray(angles, dtype=np.float64)
+        if not np.all(np.isfinite(values)):
+            raise ValueError("angles must contain only finite values")
+        return np.arctan2(
+            np.sin(values + self.angle_offset_rad),
+            np.cos(values + self.angle_offset_rad),
+        )
+
+
+def calibrate_lidar(
+    measured_ranges: NDArray[np.floating],
+    reference_ranges: NDArray[np.floating],
+    measured_angles: NDArray[np.floating] | None = None,
+    reference_angles: NDArray[np.floating] | None = None,
+) -> LidarCalibration:
+    """Fit LiDAR range scale/bias and, optionally, a constant angle offset.
+
+    Each measured range must be paired with its known reference distance in
+    meters. To calibrate angular alignment, also provide matching arrays of
+    measured and reference angles in radians.
+    """
+    measured = np.asarray(measured_ranges, dtype=np.float64)
+    reference = np.asarray(reference_ranges, dtype=np.float64)
+    if measured.ndim != 1 or reference.ndim != 1:
+        raise ValueError("range observations must be one-dimensional arrays")
+    if measured.shape != reference.shape or measured.size < 2:
+        raise ValueError("at least two paired range observations are required")
+    if not np.all(np.isfinite(measured)) or not np.all(np.isfinite(reference)):
+        raise ValueError("range observations must contain only finite values")
+    if np.any(measured <= 0) or np.any(reference <= 0):
+        raise ValueError("range observations must be positive")
+
+    design = np.column_stack((measured, np.ones_like(measured)))
+    coefficients, _, rank, _ = np.linalg.lstsq(design, reference, rcond=None)
+    if rank < 2:
+        raise ValueError("measured ranges must include at least two distinct values")
+    range_scale, range_offset = (float(value) for value in coefficients)
+    if not np.isfinite(range_scale) or range_scale <= 0:
+        raise ValueError("calibration produced an invalid range scale")
+    range_residual = range_scale * measured + range_offset - reference
+    range_rmse = float(np.sqrt(np.mean(range_residual**2)))
+
+    if (measured_angles is None) != (reference_angles is None):
+        raise ValueError(
+            "measured_angles and reference_angles must be provided together"
+        )
+    angle_offset: float | None = None
+    angle_rmse: float | None = None
+    if measured_angles is not None and reference_angles is not None:
+        measured_angle_values = np.asarray(measured_angles, dtype=np.float64)
+        reference_angle_values = np.asarray(reference_angles, dtype=np.float64)
+        if (
+            measured_angle_values.ndim != 1
+            or reference_angle_values.ndim != 1
+            or measured_angle_values.shape != reference_angle_values.shape
+            or measured_angle_values.size == 0
+        ):
+            raise ValueError("angle observations must be non-empty paired 1D arrays")
+        if not np.all(np.isfinite(measured_angle_values)) or not np.all(
+            np.isfinite(reference_angle_values)
+        ):
+            raise ValueError("angle observations must contain only finite values")
+        differences = np.arctan2(
+            np.sin(reference_angle_values - measured_angle_values),
+            np.cos(reference_angle_values - measured_angle_values),
+        )
+        mean_sine = float(np.mean(np.sin(differences)))
+        mean_cosine = float(np.mean(np.cos(differences)))
+        if np.hypot(mean_sine, mean_cosine) < 1e-12:
+            raise ValueError("angle observations do not define a unique offset")
+        angle_offset = float(np.arctan2(mean_sine, mean_cosine))
+        angular_residual = np.arctan2(
+            np.sin(differences - angle_offset),
+            np.cos(differences - angle_offset),
+        )
+        angle_rmse = float(np.sqrt(np.mean(angular_residual**2)))
+
+    return LidarCalibration(
+        range_scale=range_scale,
+        range_offset_m=range_offset,
+        range_rmse_m=range_rmse,
+        angle_offset_rad=angle_offset,
+        angle_rmse_rad=angle_rmse,
+        sample_count=int(measured.size),
+    )
 
 
 class _Sensor(Protocol):

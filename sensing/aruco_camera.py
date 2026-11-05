@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Protocol
 
 import cv2
@@ -9,10 +11,139 @@ import numpy as np
 from numpy.typing import NDArray
 
 ARUCO_DICTIONARY = cv2.aruco.DICT_4X4_50
+_DEFAULT_CALIBRATION_VIEWS = 3
 _marker_size_m: float | None = None
 _renderer: _Renderer | None = None
 _renderer_model: object | None = None
 _renderer_dimensions: tuple[int, int] | None = None
+
+
+@dataclass(frozen=True)
+class CameraCalibration:
+    """Camera intrinsics and reprojection quality from checkerboard images."""
+
+    camera_matrix: NDArray[np.float64]
+    dist_coeffs: NDArray[np.float64]
+    reprojection_error_px: float
+    image_size: tuple[int, int]
+    successful_views: int
+
+
+def calibrate_camera(
+    images: Iterable[NDArray[np.uint8]],
+    checkerboard_size: tuple[int, int],
+    square_size_m: float,
+    minimum_views: int = _DEFAULT_CALIBRATION_VIEWS,
+) -> CameraCalibration:
+    """Estimate camera intrinsics from BGR or grayscale checkerboard images.
+
+    ``checkerboard_size`` is the number of inner corners as
+    ``(columns, rows)``. ``square_size_m`` is the physical side length of one
+    square. Images must come from the same camera at the same resolution.
+    """
+    columns, rows = checkerboard_size
+    if columns < 2 or rows < 2:
+        raise ValueError("checkerboard_size must contain at least 2 corners per axis")
+    if not np.isfinite(square_size_m) or square_size_m <= 0:
+        raise ValueError("square_size_m must be finite and positive")
+    if minimum_views < 3:
+        raise ValueError("minimum_views must be at least 3")
+
+    object_template = np.zeros((rows * columns, 3), dtype=np.float32)
+    object_template[:, :2] = np.mgrid[0:columns, 0:rows].T.reshape(-1, 2)
+    object_template *= square_size_m
+
+    object_points: list[NDArray[np.float32]] = []
+    image_points: list[NDArray[np.float32]] = []
+    image_size: tuple[int, int] | None = None
+    pattern_size = (columns, rows)
+
+    for image in images:
+        frame = np.asarray(image)
+        if frame.ndim == 2:
+            height, width = frame.shape
+            gray = frame
+        elif frame.ndim == 3 and frame.shape[2] == 3:
+            height, width = frame.shape[:2]
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        else:
+            raise ValueError("each image must be grayscale or a 3-channel BGR image")
+        if gray.dtype != np.uint8:
+            raise ValueError("calibration images must use 8-bit pixel values")
+        if height <= 0 or width <= 0:
+            raise ValueError("images must have non-zero width and height")
+
+        current_size = (width, height)
+        if image_size is None:
+            image_size = current_size
+        elif current_size != image_size:
+            raise ValueError("all calibration images must have the same resolution")
+
+        found, corners = cv2.findChessboardCorners(
+            gray,
+            pattern_size,
+            None,
+            flags=cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE,
+        )
+        if not found or corners is None:
+            continue
+
+        refined = cv2.cornerSubPix(
+            gray,
+            corners,
+            (11, 11),
+            (-1, -1),
+            (
+                cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_MAX_ITER,
+                30,
+                0.001,
+            ),
+        )
+        object_points.append(object_template.copy())
+        image_points.append(refined)
+
+    if image_size is None:
+        raise ValueError("at least one calibration image is required")
+    if len(object_points) < minimum_views:
+        raise ValueError(
+            f"checkerboard detected in {len(object_points)} images; "
+            f"at least {minimum_views} views are required"
+        )
+
+    rms, camera_matrix, dist_coeffs, rotations, translations = cv2.calibrateCamera(
+        object_points,
+        image_points,
+        image_size,
+        None,
+        None,
+    )
+    squared_errors = []
+    for points, observed, rotation, translation in zip(
+        object_points,
+        image_points,
+        rotations,
+        translations,
+    ):
+        projected, _ = cv2.projectPoints(
+            points,
+            rotation,
+            translation,
+            camera_matrix,
+            dist_coeffs,
+        )
+        residual = projected.reshape(-1, 2) - observed.reshape(-1, 2)
+        squared_errors.extend(np.sum(residual**2, axis=1))
+    reprojection_error = float(np.sqrt(np.mean(squared_errors)))
+    if not np.isfinite(rms) or not np.isfinite(reprojection_error):
+        raise RuntimeError("OpenCV returned non-finite camera calibration results")
+
+    return CameraCalibration(
+        camera_matrix=np.asarray(camera_matrix, dtype=np.float64),
+        dist_coeffs=np.asarray(dist_coeffs, dtype=np.float64),
+        reprojection_error_px=reprojection_error,
+        image_size=image_size,
+        successful_views=len(object_points),
+    )
 
 
 class _Geometry(Protocol):
