@@ -20,6 +20,11 @@ from sensing.aruco_camera import (
     close_camera_renderer,
 )
 
+from sensing.lidar import (
+    get_lidar_ranges,
+    get_front_obstacle,
+)
+
 from control.command_gateway import CommandGateway
 
 from control.estimated_pose_interface import (
@@ -192,109 +197,6 @@ def get_true_pose(model, data):
         y,
         wrap(yaw),
     ])
-
-
-# ============================================================ #
-#                         LIDAR HELPERS                         #
-# ============================================================ #
-
-NUM_LIDAR_RAYS = 36
-
-LIDAR_ANGLES = np.deg2rad(
-    np.arange(
-        0,
-        360,
-        10,
-    )
-)
-
-# Wrap angles into [-pi, pi)
-LIDAR_ANGLES = (
-    LIDAR_ANGLES + np.pi
-) % (
-    2.0 * np.pi
-) - np.pi
-
-
-def get_lidar_ranges(
-    model,
-    data,
-):
-
-    ranges = np.full(
-        NUM_LIDAR_RAYS,
-        np.inf,
-    )
-
-    for i in range(
-        NUM_LIDAR_RAYS
-    ):
-
-        sensor_name = (
-            f"lidar_{i:02d}_sensor"
-        )
-
-        sensor_id = model.sensor(
-            sensor_name
-        ).id
-
-        sensor_address = model.sensor_adr[
-            sensor_id
-        ]
-
-        distance = data.sensordata[
-            sensor_address
-        ]
-
-        if distance >= 0.0:
-
-            ranges[i] = distance
-
-    return ranges
-
-
-def get_front_obstacle(
-    ranges,
-    half_angle_deg=40.0,
-):
-
-    half_angle = np.deg2rad(
-        half_angle_deg
-    )
-
-    front_mask = (
-        np.abs(
-            LIDAR_ANGLES
-        )
-        <= half_angle
-    )
-
-    front_ranges = np.where(
-        front_mask,
-        ranges,
-        np.inf,
-    )
-
-    closest_index = np.argmin(
-        front_ranges
-    )
-
-    closest_distance = front_ranges[
-        closest_index
-    ]
-
-    if not np.isfinite(
-        closest_distance
-    ):
-
-        return None
-
-    return (
-        closest_distance,
-        LIDAR_ANGLES[
-            closest_index
-        ],
-    )
 
 
 # ============================================================ #
