@@ -4,9 +4,10 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pathlib import Path
-
 import mujoco
+import mujoco.viewer
 import numpy as np
+import time
 
 from estimation.ekf import (
     TurtleBotEKF,
@@ -53,6 +54,8 @@ from control.trajectory import (
 # ============================================================ #
 
 DT = 0.05
+SHOW_VIEWER = True
+RUN_REALTIME = True
 
 TRAJECTORY_NAME = "straight"
 
@@ -283,6 +286,31 @@ mujoco.mj_forward(
     model,
     data
 )
+
+
+# ============================================================ #
+#                       MUJOCO VIEWER                          #
+# ============================================================ #
+
+viewer = None
+
+if SHOW_VIEWER:
+
+    viewer = mujoco.viewer.launch_passive(
+        model,
+        data,
+    )
+
+    # Initial camera position for the navigation scene.
+    viewer.cam.lookat[:] = [
+        1.0,
+        0.0,
+        0.0,
+    ]
+
+    viewer.cam.distance = 2.8
+    viewer.cam.azimuth = 120
+    viewer.cam.elevation = -35
 
 
 # ============================================================ #
@@ -563,6 +591,7 @@ try:
 
     for step in range(STEPS):
 
+        loop_start_time = time.perf_counter()
 
         # ---------------------------------------------------- #
         # 1. ADVANCE MUJOCO USING PREVIOUS GATEWAY COMMAND
@@ -578,7 +607,15 @@ try:
         integration_clock.advance(
             DT
         )
-        
+
+        # Update the graphical MuJoCo viewer.
+        if viewer is not None:
+
+            if not viewer.is_running():
+                break
+
+            viewer.sync()
+
         state_time = (
             step + 1
         ) * DT
@@ -826,36 +863,6 @@ try:
 
             break
 
-        # if avoidance_active:
-
-        #     wheel_radius = 0.033
-        #     track_width = 0.160
-
-        #     left_wheel = (
-        #         avoid_v
-        #         - 0.5 * track_width * avoid_w
-        #     ) / wheel_radius
-
-        #     right_wheel = (
-        #         avoid_v
-        #         + 0.5 * track_width * avoid_w
-        #     ) / wheel_radius
-
-        #     wheels = np.array([
-        #         left_wheel,
-        #         right_wheel,
-        #     ])
-
-        #     wheels = np.clip(
-        #         wheels,
-        #         -6.67,
-        #         6.67,
-        #     )
-
-        #     write_wheels(
-        #         wheels
-        #     )
-
 
         # ---------------------------------------------------- #
         # 9. GROUND TRUTH - EVALUATION ONLY
@@ -922,6 +929,29 @@ try:
             break
 
 
+        # ---------------------------------------------------- #
+        # 11. RUN SIM IN REAL TIME
+        # ---------------------------------------------------- #
+
+        if RUN_REALTIME:
+
+            elapsed = (
+                time.perf_counter()
+                - loop_start_time
+            )
+
+            remaining = (
+                DT
+                - elapsed
+            )
+
+            if remaining > 0.0:
+
+                time.sleep(
+                    remaining
+                )
+
+
 finally:
 
     stop_result = interface.disarm(
@@ -929,6 +959,10 @@ finally:
     )
 
     close_camera_renderer()
+
+    if viewer is not None:
+
+        viewer.close()
 
     print(
         "\nSystem disarmed:"
