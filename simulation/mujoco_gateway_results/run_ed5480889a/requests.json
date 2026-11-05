@@ -1,0 +1,162 @@
+[
+  {
+    "label": "first_arm",
+    "wall_monotonic": 167459.139497416,
+    "receipt": {
+      "accepted": true,
+      "armed": true,
+      "generation": 2,
+      "reason": "armed",
+      "applied_wheels": [
+        0.0,
+        0.0
+      ],
+      "zero_written": true
+    }
+  },
+  {
+    "label": "forward",
+    "wall_monotonic": 167459.140895375,
+    "receipt": {
+      "accepted": true,
+      "armed": true,
+      "generation": 2,
+      "reason": "command_applied",
+      "applied_wheels": [
+        3.0303030303030303,
+        3.0303030303030303
+      ],
+      "zero_written": null
+    },
+    "expires_at": 167459.93953445798,
+    "wheels": [
+      3.0303030303030303,
+      3.0303030303030303
+    ]
+  },
+  {
+    "label": "superseded",
+    "wall_monotonic": 167459.142289541,
+    "receipt": {
+      "accepted": false,
+      "armed": true,
+      "generation": 2,
+      "reason": "superseded_command",
+      "applied_wheels": [
+        3.0303030303030303,
+        3.0303030303030303
+      ],
+      "zero_written": null
+    }
+  },
+  {
+    "label": "wrong_generation",
+    "wall_monotonic": 167459.142764041,
+    "receipt": {
+      "accepted": false,
+      "armed": true,
+      "generation": 2,
+      "reason": "wrong_generation",
+      "applied_wheels": [
+        3.0303030303030303,
+        3.0303030303030303
+      ],
+      "zero_written": null
+    }
+  },
+  {
+    "label": "outdated",
+    "wall_monotonic": 167459.14414075,
+    "receipt": {
+      "accepted": false,
+      "armed": true,
+      "generation": 2,
+      "reason": "outdated_command",
+      "applied_wheels": [
+        3.0303030303030303,
+        3.0303030303030303
+      ],
+      "zero_written": null
+    }
+  },
+  {
+    "label": "late_after_expiry",
+    "wall_monotonic": 167460.342655291,
+    "receipt": {
+      "accepted": false,
+      "armed": false,
+      "generation": 3,
+      "reason": "not_armed; command_expired",
+      "applied_wheels": [
+        0.0,
+        0.0
+      ],
+      "zero_written": true
+    }
+  },
+  {
+    "label": "explicit_rearm",
+    "wall_monotonic": 167460.344562541,
+    "receipt": {
+      "accepted": true,
+      "armed": true,
+      "generation": 4,
+      "reason": "armed",
+      "applied_wheels": [
+        0.0,
+        0.0
+      ],
+      "zero_written": true
+    }
+  },
+  {
+    "label": "turn",
+    "wall_monotonic": 167460.346617208,
+    "receipt": {
+      "accepted": true,
+      "armed": true,
+      "generation": 4,
+      "reason": "command_applied",
+      "applied_wheels": [
+        -2.0,
+        2.0
+      ],
+      "zero_written": null
+    },
+    "expires_at": 167460.994594083,
+    "wheels": [
+      -2.0,
+      2.0
+    ]
+  },
+  {
+    "label": "old_generation_after_rearm",
+    "wall_monotonic": 167460.34862975,
+    "receipt": {
+      "accepted": false,
+      "armed": true,
+      "generation": 4,
+      "reason": "wrong_generation",
+      "applied_wheels": [
+        -2.0,
+        2.0
+      ],
+      "zero_written": null
+    }
+  },
+  {
+    "label": "explicit_stop",
+    "wall_monotonic": 167461.396340208,
+    "receipt": {
+      "accepted": false,
+      "armed": false,
+      "generation": 6,
+      "reason": "diagnostic_complete",
+      "applied_wheels": [
+        0.0,
+        0.0
+      ],
+      "zero_written": true
+    }
+  }
+]

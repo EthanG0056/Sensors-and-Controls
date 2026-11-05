@@ -228,8 +228,20 @@ class ObservabilityTests(unittest.TestCase):
     def test_zero_range_is_excluded_and_branch_difference_is_circular(self):
         state = np.r_[MARKER, .3]
         self.assertEqual(camera_model(state, MARKER)[0], 0.)
-        with np.errstate(divide='ignore', invalid='ignore'):
-            self.assertFalse(np.isfinite(camera_jacobian(state, MARKER)).all())
+        # The incoming EKF explicitly rejects range < 1e-9 m instead of
+        # returning nonfinite entries. This changes the guard, not observability.
+        with self.assertRaises(ValueError):
+            camera_jacobian(state, MARKER)
+        # Use an origin landmark to avoid subtractive cancellation and points
+        # safely either side of the guard, rather than exact threshold equality.
+        marker = np.zeros(2)
+        with self.assertRaises(ValueError):
+            camera_jacobian(np.array([-0.9e-9, 0., .3]), marker)
+        distance = 1.1e-9
+        h = camera_jacobian(np.array([-distance, 0., .3]), marker)
+        self.assertTrue(np.isfinite(h).all())
+        assert_allclose(h, [[-1., 0., 0.], [0., -1/distance, -1.]],
+                        rtol=1e-12, atol=1e-12)
         a = np.array([1., np.pi-1e-7]); b = np.array([1., -np.pi+1e-7])
         self.assertGreater(abs(a[1]-b[1]), 6.)
         assert_allclose(circular_difference(a, b, 1), [0., -2e-7], atol=ALGEBRA_ATOL)

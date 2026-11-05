@@ -4,14 +4,35 @@
 
 import numpy as np
 
+# ====================================================================== #
+#                            HELPER FUNCTIONS                            #
+# ====================================================================== #
 
-# ========================== HELPER FUNCTIONS ========================== #
+# ========================== WRAPPER FUNCTION ========================== #
 
 def wrap(angle):
 
     # Wrap angle to [-pi, pi)
     return (angle + np.pi) % (2 * np.pi) - np.pi
 
+
+# ========================== WHEEL ODOMETRY ========================== #
+
+def wheel_odometry(left_speed, right_speed,
+                   wheel_radius=0.033, wheel_separation=0.160):
+
+    # Convert measured wheel speeds into robot linear and angular velocity
+
+    v = wheel_radius * (right_speed + left_speed) / 2
+
+    omega = wheel_radius * (right_speed - left_speed) / wheel_separation
+
+    return np.array([v, omega])
+
+
+# ====================================================================== #
+#                             MAIN FUNCTIONS                             #
+# ====================================================================== #
 
 # ========================== MOTION MODEL ========================== #
 
@@ -112,6 +133,10 @@ def camera_jacobian(state, marker_position):
     range_sq = dx**2 + dy**2
     marker_range = np.sqrt(range_sq)
 
+    # Prevent divide by 0
+    if marker_range < 1e-9:
+        raise ValueError("Marker is too close to calculate a valid Jacobian")
+
     H = np.array([
         [-dx / marker_range, -dy / marker_range,  0.0],
         [ dy / range_sq,     -dx / range_sq,     -1.0]
@@ -161,12 +186,20 @@ class TurtleBotEKF:
 
         S = H @ self.P @ H.T + self.R
 
-        K = self.P @ H.T @ np.linalg.inv(S)
+        K = np.linalg.solve(
+            S,
+            H @ self.P
+        ).T
 
         self.state = self.state + K @ innovation
         self.state[2] = wrap(self.state[2])
 
-        self.P = (np.eye(3) - K @ H) @ self.P
+        I = np.eye(3)
+
+        self.P = (
+            (I - K @ H) @ self.P @ (I - K @ H).T
+            + K @ self.R @ K.T
+        )
 
         # Keep covariance symmetric
         self.P = 0.5 * (self.P + self.P.T)
