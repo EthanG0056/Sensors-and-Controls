@@ -70,3 +70,10 @@ put something here
 **Arnoe Kruger:**
 
 put something here
+
+## Generative AI declaration
+
+**Visual Studio Code copilot:**
+
+- Test files for camera and lidar functions in MuJoCo
+- Required pips installation
