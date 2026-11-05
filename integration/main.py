@@ -190,6 +190,109 @@ def get_true_pose(model, data):
 
 
 # ============================================================ #
+#                         LIDAR HELPERS                         #
+# ============================================================ #
+
+NUM_LIDAR_RAYS = 36
+
+LIDAR_ANGLES = np.deg2rad(
+    np.arange(
+        0,
+        360,
+        10,
+    )
+)
+
+# Wrap angles into [-pi, pi)
+LIDAR_ANGLES = (
+    LIDAR_ANGLES + np.pi
+) % (
+    2.0 * np.pi
+) - np.pi
+
+
+def get_lidar_ranges(
+    model,
+    data,
+):
+
+    ranges = np.full(
+        NUM_LIDAR_RAYS,
+        np.inf,
+    )
+
+    for i in range(
+        NUM_LIDAR_RAYS
+    ):
+
+        sensor_name = (
+            f"lidar_{i:02d}_sensor"
+        )
+
+        sensor_id = model.sensor(
+            sensor_name
+        ).id
+
+        sensor_address = model.sensor_adr[
+            sensor_id
+        ]
+
+        distance = data.sensordata[
+            sensor_address
+        ]
+
+        if distance >= 0.0:
+
+            ranges[i] = distance
+
+    return ranges
+
+
+def get_front_obstacle(
+    ranges,
+    half_angle_deg=40.0,
+):
+
+    half_angle = np.deg2rad(
+        half_angle_deg
+    )
+
+    front_mask = (
+        np.abs(
+            LIDAR_ANGLES
+        )
+        <= half_angle
+    )
+
+    front_ranges = np.where(
+        front_mask,
+        ranges,
+        np.inf,
+    )
+
+    closest_index = np.argmin(
+        front_ranges
+    )
+
+    closest_distance = front_ranges[
+        closest_index
+    ]
+
+    if not np.isfinite(
+        closest_distance
+    ):
+
+        return None
+
+    return (
+        closest_distance,
+        LIDAR_ANGLES[
+            closest_index
+        ],
+    )
+
+
+# ============================================================ #
 #                  LOCALISATION QUALITY CHECK                  #
 # ============================================================ #
 
@@ -485,6 +588,8 @@ camera_visible_history = []
 
 controller_mode_history = []
 
+obstacle_distance_history = []
+
 
 # ============================================================ #
 #                       INTEGRATION LOOP                       #
@@ -567,7 +672,32 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 5. CREATE ESTIMATED-STATE SNAPSHOT
+        # 5. LIDAR OBSTACLE DETECTION
+        # ---------------------------------------------------- #
+
+        lidar_ranges = get_lidar_ranges(
+            model,
+            data,
+        )
+
+        front_obstacle = get_front_obstacle(
+            lidar_ranges
+        )
+
+        if front_obstacle is not None:
+
+            obstacle_distance, obstacle_angle = (
+                front_obstacle
+            )
+
+        else:
+
+            obstacle_distance = np.inf
+            obstacle_angle = 0.0
+
+
+        # ---------------------------------------------------- #
+        # 6. CREATE ESTIMATED-STATE SNAPSHOT
         # ---------------------------------------------------- #
 
         snapshot = PoseEstimate(
@@ -594,7 +724,7 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 6. SEND ESTIMATE THROUGH REAL CONTROL INTERFACE
+        # 7. SEND ESTIMATE THROUGH REAL CONTROL INTERFACE
         # ---------------------------------------------------- #
 
         result = interface.step(
@@ -620,7 +750,7 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 7. GROUND TRUTH - EVALUATION ONLY
+        # 8. GROUND TRUTH - EVALUATION ONLY
         # ---------------------------------------------------- #
 
         true_pose = get_true_pose(
@@ -635,7 +765,7 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 8. LOGGING
+        # 9. LOGGING
         # ---------------------------------------------------- #
 
         true_history.append(
@@ -656,6 +786,10 @@ try:
 
         controller_mode_history.append(
             result.controller_mode
+        )
+
+        obstacle_distance_history.append(
+            obstacle_distance
         )
 
 
@@ -694,6 +828,10 @@ reference_history = np.array(
 
 camera_visible_history = np.array(
     camera_visible_history
+)
+
+obstacle_distance_history = np.array(
+    obstacle_distance_history
 )
 
 
@@ -855,3 +993,28 @@ print(
 print(
     estimate_history[-1]
 )
+
+print(
+    "\nLiDAR:"
+)
+
+finite_obstacles = (
+    obstacle_distance_history[
+        np.isfinite(
+            obstacle_distance_history
+        )
+    ]
+)
+
+if len(finite_obstacles) > 0:
+
+    print(
+        f"Closest front obstacle: "
+        f"{np.min(finite_obstacles):.3f} m"
+    )
+
+else:
+
+    print(
+        "No front obstacles detected."
+    )
