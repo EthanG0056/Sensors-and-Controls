@@ -5,7 +5,7 @@ Repository for Integrated Project.
 Group 23:
 
 - Ethan Griffiths (25364771)
-- Lachlan Taylor (student id)
+- Lachlan Taylor (25992569)
 - Arnoe Kruger (student id)
 
 ## Part A: Modelling
@@ -65,7 +65,16 @@ leases. Related interface and gateway checks are in
 
 **Lachlan Taylor:**
 
-put something here
+- Estimation:
+  - ekf
+  - calibration
+
+- System Integration (main + tests)
+- Aruco Markers
+- Scene
+- Obstacle avoidance
+- Charger station docking procedure
+- Mujoco simulation
 
 **Arnoe Kruger:**
 
