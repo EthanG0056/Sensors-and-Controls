@@ -313,7 +313,7 @@ def get_camera_measurement(
     model: object,
     data: object,
     camera_name: str,
-) -> NDArray[np.float64] | None:
+) -> tuple[int, NDArray[np.float64]] | None:
     
     # Render a MuJoCo camera and return its ``[[range], [bearing]]`` marker measurement.
 
@@ -378,9 +378,20 @@ def get_camera_measurement(
     image = _renderer.render()
 
     detection = detect_aruco_marker(image)
+
     if detection is None:
         return None
 
-    _, corners = detection
-    tvec, _ = estimate_marker_pose(corners, camera_matrix, dist_coeffs)
-    return get_range_and_bearing(tvec)
+    marker_id, corners = detection
+
+    tvec, _ = estimate_marker_pose(
+        corners,
+        camera_matrix,
+        dist_coeffs,
+    )
+
+    measurement = get_range_and_bearing(
+        tvec
+    )
+
+    return marker_id, measurement
