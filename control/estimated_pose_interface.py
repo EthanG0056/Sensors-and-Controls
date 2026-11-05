@@ -273,9 +273,19 @@ class EstimatedPoseInterface:
             body, wheels = np.asarray(body, float), np.asarray(wheels, float)
             if (body.shape != (2,) or wheels.shape != (2,) or not np.isfinite(body).all()
                     or not np.isfinite(wheels).all() or max(abs(wheels)) > WHEEL_LIMIT
-                    or mode not in ('tracking_lqr', 'tracking_stationary_stop', 'bearing',
-                                    'approach', 'heading', 'coast', 'stage_bearing',
-                                    'stage_approach', 'stop', 'fault')
+                    or mode not in (
+                            'tracking_lqr',
+                            'tracking_stationary_stop',
+                            'tracking_avoidance',
+                            'bearing',
+                            'approach',
+                            'heading',
+                            'coast',
+                            'stage_bearing',
+                            'stage_approach',
+                            'stop',
+                            'fault',
+                        )
                     or not isinstance(saturated, (bool, np.bool_))):
                 raise ValueError('invalid_controller_output')
             represented = np.array([.033*sum(wheels)/2, .033*(wheels[1]-wheels[0])/.160])

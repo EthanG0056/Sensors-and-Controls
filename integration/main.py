@@ -301,6 +301,11 @@ if SHOW_VIEWER:
         data,
     )
 
+    # Turn off LiDAR lines
+    viewer.opt.flags[
+        mujoco.mjtVisFlag.mjVIS_RANGEFINDER
+    ] = False
+
     # Initial camera position for the navigation scene.
     viewer.cam.lookat[:] = [
         1.0,
@@ -459,7 +464,7 @@ parameters = TerminalParameters(
     sample_time=DT
 )
 
-DOCKING_DISTANCE = 0.30
+DOCKING_DISTANCE = 0.1
 
 goal = np.array([
     MARKER_POSITION[0] - DOCKING_DISTANCE,
@@ -473,12 +478,168 @@ print(
 )
 
 
+# ============================================================ #
+#                 OBSTACLE AVOIDANCE SUPERVISOR                #
+# ============================================================ #
+
+class ObstacleAvoidanceSupervisor:
+
+    def __init__(
+        self,
+        goal,
+        duration,
+        parameters,
+    ):
+
+        self.normal_controller = (
+            StagedTrajectoryTerminalController(
+                goal,
+                duration,
+                parameters=parameters,
+            )
+        )
+
+        # Expose the normal controller contract expected
+        # by EstimatedPoseInterface.
+        self.end_time = self.normal_controller.end_time
+        self.tracker = self.normal_controller.tracker
+        self.terminal = self.normal_controller.terminal
+
+    def command(
+        self,
+        estimated_pose,
+        reference_sample,
+        reference_time,
+    ):
+
+        global avoidance_active
+        global avoidance_direction
+        global recovery_active
+
+        # ---------------------------------------- #
+        # LIDAR AVOIDANCE
+        # ---------------------------------------- #
+
+        if (
+            avoidance_active
+            and reference_time < DURATION
+        ):
+
+            # Slow forward movement.
+            v = 0.04
+
+            # Gentle turn around obstacle.
+            omega = (
+                avoidance_direction
+                * 0.35
+            )
+
+            wheel_radius = 0.033
+            wheel_track = 0.160
+
+            left = (
+                v
+                - omega * wheel_track / 2.0
+            ) / wheel_radius
+
+            right = (
+                v
+                + omega * wheel_track / 2.0
+            ) / wheel_radius
+
+            wheels = np.array([
+                left,
+                right,
+            ])
+
+            body = np.array([
+                v,
+                omega,
+            ])
+
+            return (
+                body,
+                wheels,
+                "tracking_avoidance",
+                False,
+            )
+
+
+        # ---------------------------------------- #
+        # SIMPLE PATH RECOVERY
+        # ---------------------------------------- #
+
+        if (
+            recovery_active
+            and reference_time < DURATION
+        ):
+
+            x, y, theta = estimated_pose
+
+            # Continue moving forward slowly.
+            v = 0.05
+
+            # Gently steer back towards y = 0
+            # and heading = 0.
+            omega = (
+                -1.2 * theta
+                -1.5 * y
+            )
+
+            omega = np.clip(
+                omega,
+                -0.35,
+                0.35,
+            )
+
+            wheel_radius = 0.033
+            wheel_track = 0.160
+
+            left = (
+                v
+                - omega * wheel_track / 2.0
+            ) / wheel_radius
+
+            right = (
+                v
+                + omega * wheel_track / 2.0
+            ) / wheel_radius
+
+            wheels = np.array([
+                left,
+                right,
+            ])
+
+            body = np.array([
+                v,
+                omega,
+            ])
+
+            return (
+                body,
+                wheels,
+                "tracking_avoidance",
+                False,
+            )
+
+
+        # ---------------------------------------- #
+        # NORMAL LQR / TERMINAL CONTROL
+        # ---------------------------------------- #
+
+        return self.normal_controller.command(
+            estimated_pose,
+            reference_sample,
+            reference_time,
+        )
+
+    
 def supervisor_factory():
 
-    return StagedTrajectoryTerminalController(
+    return ObstacleAvoidanceSupervisor(
         goal,
         DURATION,
-        parameters=parameters,
+        parameters,
     )
 
 
@@ -582,6 +743,19 @@ marker_detection_counts = {
     1: 0,
 }
 
+
+#================== Obstacle avoidance state ==================#
+
+AVOID_ENTER_DISTANCE = 0.40
+AVOID_EXIT_DISTANCE = 0.50
+
+avoidance_active = False
+recovery_active = False
+avoidance_direction = 0.0
+
+
+DOCKING_TRIGGER_DISTANCE = 0.90
+docking_active = False
 
 # ============================================================ #
 #                       INTEGRATION LOOP                       #
@@ -687,7 +861,7 @@ try:
                     CAMERA_YAW_OFFSET,
                 )
 
-
+        
         # ---------------------------------------------------- #
         # 5. LIDAR OBSTACLE DETECTION
         # ---------------------------------------------------- #
@@ -714,16 +888,46 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 6. SIMPLE OBSTACLE AVOIDANCE OVERRIDE
+        # 6. OBSTACLE AVOIDANCE STATE
         # ---------------------------------------------------- #
 
-        AVOID_DISTANCE = 0.4
+        # Start avoidance.
+        if (
+            not avoidance_active
+            and state_time < DURATION
+            and obstacle_distance < AVOID_ENTER_DISTANCE
+        ):
 
-        avoidance_active = (
-            state_time < DURATION
-            and obstacle_distance < AVOID_DISTANCE
-        )
+            avoidance_active = True
 
+            # Obstacle on left -> turn right.
+            if obstacle_angle > 0.0:
+                avoidance_direction = -1.0
+
+            # Obstacle on right -> turn left.
+            else:
+                avoidance_direction = 1.0
+
+
+        # Finish avoidance once the obstacle is clear.
+        if (
+            avoidance_active
+            and obstacle_distance > AVOID_EXIT_DISTANCE
+        ):
+
+            avoidance_active = False
+            recovery_active = True
+
+
+        # Finish recovery once near the original path.
+        if recovery_active:
+
+            close_to_path = abs(ekf.state[1]) < 0.03
+            heading_aligned = abs(ekf.state[2]) < np.deg2rad(5.0)
+
+            if close_to_path and heading_aligned:
+
+                recovery_active = False
 
         # ---------------------------------------------------- #
         # 7. CREATE ESTIMATED-STATE SNAPSHOT
@@ -758,72 +962,9 @@ try:
 
         def reference_provider(t):
 
-            normal_reference = reference(
+            return reference(
                 TRAJECTORY_NAME,
-                t
-            )
-
-            if not avoidance_active:
-                return normal_reference
-
-            # Current estimated robot pose.
-            x, y, theta = ekf.state
-
-            # Unit vectors in the robot's forward and left directions.
-            forward = np.array([
-                np.cos(theta),
-                np.sin(theta),
-            ])
-
-            left = np.array([
-                -np.sin(theta),
-                np.cos(theta),
-            ])
-
-            # Move forward while stepping sideways away from the obstacle.
-            forward_offset = 0.25
-            lateral_offset = 0.20
-
-            # Obstacle on left -> detour right.
-            if obstacle_angle > 0.0:
-
-                target_xy = (
-                    ekf.state[:2]
-                    + forward_offset * forward
-                    - lateral_offset * left
-                )
-
-                target_heading = wrap(
-                    theta
-                    - np.deg2rad(20.0)
-                )
-
-            # Obstacle on right -> detour left.
-            else:
-
-                target_xy = (
-                    ekf.state[:2]
-                    + forward_offset * forward
-                    + lateral_offset * left
-                )
-
-                target_heading = wrap(
-                    theta
-                    + np.deg2rad(20.0)
-                )
-
-            avoidance_pose = np.array([
-                target_xy[0],
-                target_xy[1],
-                target_heading,
-            ])
-
-            return type(normal_reference)(
-                pose=avoidance_pose,
-                input=np.array([
-                    0.05,
-                    0.0,
-                ]),
+                t,
             )
 
 
@@ -959,10 +1100,6 @@ finally:
     )
 
     close_camera_renderer()
-
-    if viewer is not None:
-
-        viewer.close()
 
     print(
         "\nSystem disarmed:"
@@ -1122,7 +1259,8 @@ estimated_docking_heading_error = abs(
     estimated_docking_error[2]
 )
 
-docking_samples = (
+docking_samples = max(
+    0,
     len(true_history)
     - tracking_samples
 )
@@ -1332,3 +1470,23 @@ print(
 print(
     estimate_history[-1]
 )
+
+
+# ============================================================ #
+#                    HOLD FINAL VIEWER                         #
+# ============================================================ #
+
+if viewer is not None:
+
+    print(
+        "\nSimulation complete."
+        "\nClose the MuJoCo window to exit."
+    )
+
+    while viewer.is_running():
+
+        viewer.sync()
+
+        time.sleep(
+            0.05
+        )
