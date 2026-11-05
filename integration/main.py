@@ -27,14 +27,7 @@ from sensing.lidar import (
 
 from control.command_gateway import CommandGateway
 
-from control.estimated_pose_interface import (
-    PoseEstimate,
-    InterfacePolicy,
-    EstimatedPoseInterface,
-)
-
 from control.terminal_controller import (
-    TrajectoryTerminalController,
     TerminalParameters,
 )
 
@@ -352,26 +345,46 @@ configure_marker_size_from_geom(
     (1, 2),
 )
 
-marker_geom_id = model.geom(
+# Marker 0 - charging station
+
+marker_0_geom_id = model.geom(
     "aruco_marker"
 ).id
 
 MARKER_POSITION = data.geom_xpos[
-    marker_geom_id,
+    marker_0_geom_id,
     :2
 ].copy()
 
-DOCKING_DISTANCE = 0.30
 
-goal = np.array([
-    MARKER_POSITION[0] - DOCKING_DISTANCE,
-    MARKER_POSITION[1],
-    0.0,
-])
+# Marker 1 - room landmark
+
+marker_1_geom_id = model.geom(
+    "aruco_marker_1"
+).id
+
+MARKER_1_POSITION = data.geom_xpos[
+    marker_1_geom_id,
+    :2
+].copy()
+
+
+# Known landmark map
+
+MARKER_POSITIONS = {
+    0: MARKER_POSITION,
+    1: MARKER_1_POSITION,
+}
+
 
 print(
-    "Known marker position:",
+    "Marker 0 position:",
     MARKER_POSITION
+)
+
+print(
+    "Marker 1 position:",
+    MARKER_1_POSITION
 )
 
 
@@ -536,6 +549,12 @@ obstacle_angle_history = []
 avoidance_history = []
 
 
+marker_detection_counts = {
+    0: 0,
+    1: 0,
+}
+
+
 # ============================================================ #
 #                       INTEGRATION LOOP                       #
 # ============================================================ #
@@ -596,24 +615,40 @@ try:
         # 4. EKF CAMERA UPDATE
         # ---------------------------------------------------- #
 
-        measurement = get_camera_measurement(
+        camera_result = get_camera_measurement(
             model,
             data,
             "front_camera",
         )
 
         camera_visible = (
-            measurement is not None
+            camera_result is not None
         )
 
         if camera_visible:
 
-            ekf.update_camera(
-                measurement,
-                MARKER_POSITION,
-                CAMERA_OFFSET,
-                CAMERA_YAW_OFFSET,
+            marker_id, measurement = (
+                camera_result
             )
+
+            if marker_id in MARKER_POSITIONS:
+
+                marker_detection_counts[
+                    marker_id
+                ] += 1
+
+                marker_position = (
+                    MARKER_POSITIONS[
+                        marker_id
+                    ]
+                )
+
+                ekf.update_camera(
+                    measurement,
+                    marker_position,
+                    CAMERA_OFFSET,
+                    CAMERA_YAW_OFFSET,
+                )
 
 
         # ---------------------------------------------------- #
@@ -1169,6 +1204,15 @@ print(
     f"/{len(camera_visible_history)}"
 )
 
+print(
+    f"Marker 0 detections: "
+    f"{marker_detection_counts[0]}"
+)
+
+print(
+    f"Marker 1 detections: "
+    f"{marker_detection_counts[1]}"
+)
 
 print(
     "\n-------------------- LIDAR -------------------"

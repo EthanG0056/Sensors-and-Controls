@@ -70,16 +70,31 @@
       reflectance="0.2"
     />
 
-    <!-- ArUco Marker Texture -->
+    <!-- ArUco Marker 0 Texture -->
     <texture
-      name="aruco_texture"
+      name="aruco_texture_0"
       type="2d"
       file="../assets/aruco_0.png"
     />
 
     <material
-      name="aruco_material"
-      texture="aruco_texture"
+      name="aruco_material_0"
+      texture="aruco_texture_0"
+      texrepeat="1 1"
+      texuniform="false"
+    />
+
+
+    <!-- ArUco Marker 1 Texture -->
+    <texture
+      name="aruco_texture_1"
+      type="2d"
+      file="../assets/aruco_1.png"
+    />
+
+    <material
+      name="aruco_material_1"
+      texture="aruco_texture_1"
       texrepeat="1 1"
       texuniform="false"
     />
@@ -130,12 +145,34 @@
         type="box"
         pos="-0.056 0 0.15"
         size="0.005 0.10 0.10"
-        material="aruco_material"
+        material="aruco_material_0"
         contype="0"
         conaffinity="0"
       />
 
     </body>
+
+
+    <!-- ======================================================== -->
+    <!--                     ARUCO LANDMARK 1                     -->
+    <!-- ======================================================== -->
+
+    <body
+      name="aruco_landmark_1"
+      pos="1.05 0 0.38"
+    >
+
+      <geom
+        name="aruco_marker_1"
+        type="box"
+        size="0.005 0.10 0.10"
+        material="aruco_material_1"
+        contype="0"
+        conaffinity="0"
+      />
+
+    </body>
+
 
     <!-- ======================================================== -->
     <!--                         OBSTACLE                         -->
