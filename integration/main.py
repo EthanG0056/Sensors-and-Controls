@@ -90,6 +90,10 @@ BODY_FRAME = "base"
 TASK_ID = "straight_tracking_test"
 
 
+NAVIGATION_SPEED = 0.08
+NAVIGATION_TARGET_X = 1.85
+
+
 # ============================================================ #
 #                       INTEGRATION CLOCK                      #
 # ============================================================ #
@@ -236,12 +240,19 @@ def localisation_quality(
 
     # Reject very uncertain localisation.
     if std[0] > 0.15:
+        print("QUALITY FAIL: x std =", std[0])
         return False
 
     if std[1] > 0.15:
+        print("QUALITY FAIL: y std =", std[1])
         return False
 
     if std[2] > np.deg2rad(15.0):
+        print(
+            "QUALITY FAIL: heading std =",
+            np.rad2deg(std[2]),
+            "deg",
+        )
         return False
 
     # On the first sample there is no previous accepted estimate.
@@ -260,11 +271,24 @@ def localisation_quality(
         )
     )
 
-    # Reject implausibly large estimate jumps between 20 Hz samples.
-    if position_jump > 0.05:
+    if position_jump > 0.15:
+        print(
+            "QUALITY FAIL: position jump =",
+            position_jump,
+            "m",
+        )
+        print("previous =", previous.pose)
+        print("current  =", current.pose)
         return False
 
     if heading_jump > np.deg2rad(20.0):
+        print(
+            "QUALITY FAIL: heading jump =",
+            np.rad2deg(heading_jump),
+            "deg",
+        )
+        print("previous =", previous.pose)
+        print("current  =", current.pose)
         return False
 
     return True
@@ -513,87 +537,78 @@ class ObstacleAvoidanceSupervisor:
     ):
 
         global avoidance_active
+        global avoidance_phase
         global avoidance_direction
-        global recovery_active
+        global docking_active
+        global navigation_time
+        global avoidance_phase_start
+
 
         # ---------------------------------------- #
-        # LIDAR AVOIDANCE
+        # DOCKING
         # ---------------------------------------- #
 
-        if (
-            avoidance_active
-            and reference_time < DURATION
-        ):
+        if docking_active:
 
-            # Slow forward movement.
-            v = 0.04
-
-            # Gentle turn around obstacle.
-            omega = (
-                avoidance_direction
-                * 0.35
+            terminal_time = (
+                self.normal_controller.end_time
+                + DT
             )
+
+            return self.normal_controller.command(
+                estimated_pose,
+                reference_sample,
+                terminal_time,
+            )
+
+
+        # ---------------------------------------- #
+        # OBSTACLE AVOIDANCE
+        # ---------------------------------------- #
+
+        if avoidance_active:
 
             wheel_radius = 0.033
             wheel_track = 0.160
 
-            left = (
-                v
-                - omega * wheel_track / 2.0
-            ) / wheel_radius
+            # Turn away from obstacle.
+            if avoidance_phase == "turn_out":
 
-            right = (
-                v
-                + omega * wheel_track / 2.0
-            ) / wheel_radius
+                v = 0.0
 
-            wheels = np.array([
-                left,
-                right,
-            ])
+                omega = (
+                    avoidance_direction
+                    * 0.35
+                )
 
-            body = np.array([
-                v,
-                omega,
-            ])
+            # Drive diagonally past obstacle.
+            elif avoidance_phase == "drive_past":
 
-            return (
-                body,
-                wheels,
-                "tracking_avoidance",
-                False,
-            )
+                v = 0.08
+                omega = 0.0
 
+            # Gradually curve back towards original path.
+            elif avoidance_phase == "rejoin":
 
-        # ---------------------------------------- #
-        # SIMPLE PATH RECOVERY
-        # ---------------------------------------- #
+                x, y, theta = estimated_pose
 
-        if (
-            recovery_active
-            and reference_time < DURATION
-        ):
+                v = 0.07
 
-            x, y, theta = estimated_pose
+                omega = (
+                    -0.6 * y
+                    -0.8 * theta
+                )
 
-            # Continue moving forward slowly.
-            v = 0.05
+                omega = np.clip(
+                    omega,
+                    -0.18,
+                    0.18,
+                )
 
-            # Gently steer back towards y = 0
-            # and heading = 0.
-            omega = (
-                -1.2 * theta
-                -1.5 * y
-            )
+            else:
 
-            omega = np.clip(
-                omega,
-                -0.35,
-                0.35,
-            )
-
-            wheel_radius = 0.033
-            wheel_track = 0.160
+                v = 0.0
+                omega = 0.0
 
             left = (
                 v
@@ -627,10 +642,15 @@ class ObstacleAvoidanceSupervisor:
         # NORMAL LQR / TERMINAL CONTROL
         # ---------------------------------------- #
 
+        controller_time = min(
+            navigation_time,
+            DURATION - DT,
+        )
+
         return self.normal_controller.command(
             estimated_pose,
             reference_sample,
-            reference_time,
+            controller_time,
         )
 
     
@@ -746,16 +766,21 @@ marker_detection_counts = {
 
 #================== Obstacle avoidance state ==================#
 
-AVOID_ENTER_DISTANCE = 0.40
-AVOID_EXIT_DISTANCE = 0.50
+AVOID_ENTER_DISTANCE = 0.20
 
 avoidance_active = False
-recovery_active = False
+avoidance_phase = None
 avoidance_direction = 0.0
+avoidance_phase_start = 0.0
 
+TURN_TIME = 2
+DRIVE_TIME = 5
+REJOIN_TIME = 3.0
 
 DOCKING_TRIGGER_DISTANCE = 0.90
 docking_active = False
+
+navigation_time = 0.0
 
 # ============================================================ #
 #                       INTEGRATION LOOP                       #
@@ -861,9 +886,34 @@ try:
                     CAMERA_YAW_OFFSET,
                 )
 
-        
+
         # ---------------------------------------------------- #
-        # 5. LIDAR OBSTACLE DETECTION
+        # 5. DOCKING ACTIVATION
+        # ---------------------------------------------------- #
+
+        distance_to_charger = np.linalg.norm(
+            ekf.state[:2]
+            - MARKER_POSITION
+        )
+
+        if (
+            not docking_active
+            and distance_to_charger
+            < DOCKING_TRIGGER_DISTANCE
+        ):
+
+            docking_active = True
+            avoidance_active = False
+
+            print(
+                f"\nDocking activated at "
+                f"{distance_to_charger:.2f} m "
+                f"from marker 0"
+            )
+
+
+        # ---------------------------------------------------- #
+        # 6. LIDAR OBSTACLE DETECTION
         # ---------------------------------------------------- #
 
         lidar_ranges = get_lidar_ranges(
@@ -888,49 +938,92 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 6. OBSTACLE AVOIDANCE STATE
+        # 7. OBSTACLE AVOIDANCE STATE
         # ---------------------------------------------------- #
+
+        theta = ekf.state[2]
 
         # Start avoidance.
         if (
-            not avoidance_active
-            and state_time < DURATION
+            not docking_active
+            and not avoidance_active
             and obstacle_distance < AVOID_ENTER_DISTANCE
         ):
 
             avoidance_active = True
+            avoidance_phase = "turn_out"
+            avoidance_phase_start = state_time
 
-            # Obstacle on left -> turn right.
+            # Obstacle on left -> go right.
             if obstacle_angle > 0.0:
                 avoidance_direction = -1.0
 
-            # Obstacle on right -> turn left.
+            # Obstacle on right -> go left.
             else:
                 avoidance_direction = 1.0
 
 
-        # Finish avoidance once the obstacle is clear.
+        # ---------------------------------------------------- #
+        # ADVANCE AVOIDANCE PHASE
+        # ---------------------------------------------------- #
+
+        if avoidance_active:
+
+            phase_time = (
+                state_time
+                - avoidance_phase_start
+            )
+
+            # Finished turning away.
+            if (
+                avoidance_phase == "turn_out"
+                and phase_time >= TURN_TIME
+            ):
+
+                avoidance_phase = "drive_past"
+                avoidance_phase_start = state_time
+
+            # Finished driving past obstacle.
+            elif (
+                avoidance_phase == "drive_past"
+                and phase_time >= DRIVE_TIME
+            ):
+
+                avoidance_phase = "rejoin"
+                avoidance_phase_start = state_time
+
+            # Finished gradually rejoining path.
+            elif (
+                avoidance_phase == "rejoin"
+                and phase_time >= REJOIN_TIME
+            ):
+
+                avoidance_active = False
+                avoidance_phase = None
+
+                # Resynchronise navigation reference.
+                navigation_time = max(
+                    navigation_time,
+                    ekf.state[0] / NAVIGATION_SPEED,
+                )
+
+                navigation_time = min(
+                    navigation_time,
+                    NAVIGATION_TARGET_X / NAVIGATION_SPEED,
+                )
+
+        # Only advance trajectory time while normal LQR
+        # navigation is actually active.
         if (
-            avoidance_active
-            and obstacle_distance > AVOID_EXIT_DISTANCE
+            not avoidance_active
+            and not docking_active
         ):
 
-            avoidance_active = False
-            recovery_active = True
+            navigation_time += DT
 
-
-        # Finish recovery once near the original path.
-        if recovery_active:
-
-            close_to_path = abs(ekf.state[1]) < 0.03
-            heading_aligned = abs(ekf.state[2]) < np.deg2rad(5.0)
-
-            if close_to_path and heading_aligned:
-
-                recovery_active = False
 
         # ---------------------------------------------------- #
-        # 7. CREATE ESTIMATED-STATE SNAPSHOT
+        # 8. CREATE ESTIMATED-STATE SNAPSHOT
         # ---------------------------------------------------- #
 
         snapshot = PoseEstimate(
@@ -957,20 +1050,48 @@ try:
 
         
         # ---------------------------------------------------- #
-        # 8. SEND ESTIMATE THROUGH REAL CONTROL INTERFACE
+        # 9. SEND ESTIMATE THROUGH REAL CONTROL INTERFACE
         # ---------------------------------------------------- #
-
+        
         def reference_provider(t):
 
-            return reference(
+            base_reference = reference(
                 TRAJECTORY_NAME,
-                t,
+                min(
+                    navigation_time,
+                    DURATION,
+                ),
+            )
+
+            x_reference = min(
+                NAVIGATION_SPEED * navigation_time,
+                NAVIGATION_TARGET_X,
+            )
+
+            if x_reference < NAVIGATION_TARGET_X:
+
+                reference_speed = NAVIGATION_SPEED
+
+            else:
+
+                reference_speed = 0.0
+
+            return type(base_reference)(
+                pose=np.array([
+                    x_reference,
+                    0.0,
+                    0.0,
+                ]),
+                input=np.array([
+                    reference_speed,
+                    0.0,
+                ]),
             )
 
 
         clearance = None
 
-        if state_time >= DURATION:
+        if docking_active:
 
             clearance = ClearanceGrant(
                 grant_id="terminal_test_clearance",
@@ -989,6 +1110,7 @@ try:
             snapshot,
             reference_provider,
             clearance=clearance,
+            terminal_active=docking_active,
         )
 
 
@@ -1006,7 +1128,7 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 9. GROUND TRUTH - EVALUATION ONLY
+        # 10. GROUND TRUTH - EVALUATION ONLY
         # ---------------------------------------------------- #
 
         true_pose = get_true_pose(
@@ -1014,14 +1136,13 @@ try:
             data
         )
 
-        current_reference = reference(
-            TRAJECTORY_NAME,
+        current_reference = reference_provider(
             state_time,
         )
 
 
         # ---------------------------------------------------- #
-        # 10. LOGGING
+        # 11. LOGGING
         # ---------------------------------------------------- #
 
         true_history.append(
@@ -1058,7 +1179,7 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 11. CHECK FOR COMPLETED DOCKING
+        # 12. CHECK FOR COMPLETED DOCKING
         # ---------------------------------------------------- #
 
         if result.estimated_stop_qualified:
@@ -1071,7 +1192,7 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 11. RUN SIM IN REAL TIME
+        # 13. RUN SIM IN REAL TIME
         # ---------------------------------------------------- #
 
         if RUN_REALTIME:

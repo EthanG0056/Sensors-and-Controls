@@ -241,7 +241,14 @@ class EstimatedPoseInterface:
         return (np.linalg.norm(snapshot.pose[:2]-self.goal[:2]) <= self.parameters.position_exit
                 and abs(wrap(snapshot.pose[2]-self.goal[2])) <= self.parameters.heading_exit)
 
-    def step(self, estimate, reference_provider, *, clearance=None):
+    def step(
+        self,
+        estimate,
+        reference_provider,
+        *,
+        clearance=None,
+        terminal_active=False,
+    ):  
         if not self.armed:
             return self.disarm('interface_not_armed')
         try:
@@ -255,7 +262,7 @@ class EstimatedPoseInterface:
             validate_estimate(snapshot, self.policy, now=now, epoch=self.epoch,
                               expected_state_time=expected, previous=self.previous)
             relative_time = self.accepted_samples*self.policy.sample_time
-            terminal = relative_time >= self.terminal_start_s
+            terminal = bool(terminal_active)
             if terminal:
                 self._clearance(clearance, now)  # before invoking staging or terminal law
             if self.completed and not self._at_goal(snapshot):

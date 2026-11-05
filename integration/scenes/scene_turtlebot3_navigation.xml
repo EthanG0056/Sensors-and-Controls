@@ -168,7 +168,7 @@
     <!--                    CHARGING STATION                      -->
     <!-- ======================================================== -->
 
-    <body name="charging_station" pos="2.68 -0.3 0">
+    <body name="charging_station" pos="2.68 0.4 0">
 
       <!-- Station body -->
       <geom
@@ -205,27 +205,6 @@
 
 
     <!-- ======================================================== -->
-    <!--                     ARUCO LANDMARK 1                     -->
-    <!-- ======================================================== -->
-
-    <body
-      name="aruco_landmark_1"
-      pos="2.75 0.6 0.2"
-    >
-
-      <geom
-        name="aruco_marker_1"
-        type="box"
-        size="0.005 0.10 0.10"
-        material="aruco_material_1"
-        contype="0"
-        conaffinity="0"
-      />
-
-    </body>
-
-
-    <!-- ======================================================== -->
     <!--                         OBSTACLE                         -->
     <!-- ======================================================== -->
 
@@ -233,19 +212,38 @@
     <geom
       name="obstacle_1"
       type="box"
-      pos="0.8 0.24 0.15"
-      size="0.15 0.15 0.15"
+      pos="0.6 0.15 0.15"
+      size="0.075 0.075 0.15"
       rgba="0.75 0.20 0.20 1"
     />
 
-    <!-- Obstacle 2 -->
-    <geom
-      name="obstacle_2"
-      type="cylinder"
-      pos="1.35 -0.6 0.15"
-      size="0.12 0.15"
-      rgba="0.80 0.45 0.15 1"
-    />
+    <!-- Obstacle 2 with relative ArUco marker -->
+    <body
+      name="obstacle_2_body"
+      pos="1.35 -0.2 0"
+    >
+
+      <!-- Obstacle 2 -->
+      <geom
+        name="obstacle_2"
+        type="box"
+        pos="0 0 0.15"
+        size="0.12 0.12 0.15"
+        rgba="0.80 0.45 0.15 1"
+      />
+
+      <!-- ArUco marker 1 -->
+      <geom
+        name="aruco_marker_1"
+        type="box"
+        pos="-0.135 0 0.20"
+        size="0.005 0.10 0.10"
+        material="aruco_material_1"
+        contype="0"
+        conaffinity="0"
+      />
+
+    </body>
 
 
   </worldbody>
