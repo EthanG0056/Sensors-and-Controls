@@ -79,12 +79,14 @@ leases. Related interface and gateway checks are in
 **Arnoe Kruger:**
 
 Mathematical Modelling (Part A):
+
 -TurtleBot3 Burger differential-drive kinematic modelling
 -MuJoCo drive-response identification and parameter estimation
 -Model verification, held-out validation and actuator gain comparisons
 -Controllability and observability analysis
 
 Control (Part D):
+
 -Discrete-time LQR trajectory-tracking controller
 -Trajectory generation and reference tracking
 -LQR tuning, simulation benchmarking and performance evaluation
@@ -92,6 +94,7 @@ Control (Part D):
 -Terminal accuracy and robustness testing
 
 System Integration and Validation:
+
 -EKF measured-wheel odometry adapter and timestamped pose snapshots
 -Estimated-pose validation and controller interface
 -Wheel-command gateway, command expiry and fault handling
