@@ -590,6 +590,10 @@ controller_mode_history = []
 
 obstacle_distance_history = []
 
+obstacle_angle_history = []
+
+avoidance_history = []
+
 
 # ============================================================ #
 #                       INTEGRATION LOOP                       #
@@ -697,7 +701,18 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 6. CREATE ESTIMATED-STATE SNAPSHOT
+        # 6. SIMPLE OBSTACLE AVOIDANCE OVERRIDE
+        # ---------------------------------------------------- #
+
+        AVOID_DISTANCE = 0.4
+
+        avoidance_active = (
+            obstacle_distance < AVOID_DISTANCE
+        )
+
+
+        # ---------------------------------------------------- #
+        # 7. CREATE ESTIMATED-STATE SNAPSHOT
         # ---------------------------------------------------- #
 
         snapshot = PoseEstimate(
@@ -722,17 +737,85 @@ try:
             validity_reason="EKF operating normally",
         )
 
+        
+        # ---------------------------------------------------- #
+        # 8. SEND ESTIMATE THROUGH REAL CONTROL INTERFACE
+        # ---------------------------------------------------- #
 
-        # ---------------------------------------------------- #
-        # 7. SEND ESTIMATE THROUGH REAL CONTROL INTERFACE
-        # ---------------------------------------------------- #
+        def reference_provider(t):
+
+            normal_reference = reference(
+                TRAJECTORY_NAME,
+                t
+            )
+
+            if not avoidance_active:
+                return normal_reference
+
+            # Current estimated robot pose.
+            x, y, theta = ekf.state
+
+            # Unit vectors in the robot's forward and left directions.
+            forward = np.array([
+                np.cos(theta),
+                np.sin(theta),
+            ])
+
+            left = np.array([
+                -np.sin(theta),
+                np.cos(theta),
+            ])
+
+            # Move forward while stepping sideways away from the obstacle.
+            forward_offset = 0.25
+            lateral_offset = 0.20
+
+            # Obstacle on left -> detour right.
+            if obstacle_angle > 0.0:
+
+                target_xy = (
+                    ekf.state[:2]
+                    + forward_offset * forward
+                    - lateral_offset * left
+                )
+
+                target_heading = wrap(
+                    theta
+                    - np.deg2rad(20.0)
+                )
+
+            # Obstacle on right -> detour left.
+            else:
+
+                target_xy = (
+                    ekf.state[:2]
+                    + forward_offset * forward
+                    + lateral_offset * left
+                )
+
+                target_heading = wrap(
+                    theta
+                    + np.deg2rad(20.0)
+                )
+
+            avoidance_pose = np.array([
+                target_xy[0],
+                target_xy[1],
+                target_heading,
+            ])
+
+            return type(normal_reference)(
+                pose=avoidance_pose,
+                input=np.array([
+                    0.05,
+                    0.0,
+                ]),
+            )
+
 
         result = interface.step(
             snapshot,
-            lambda t: reference(
-                TRAJECTORY_NAME,
-                t
-            ),
+            reference_provider,
         )
 
 
@@ -748,9 +831,39 @@ try:
 
             break
 
+        # if avoidance_active:
+
+        #     wheel_radius = 0.033
+        #     track_width = 0.160
+
+        #     left_wheel = (
+        #         avoid_v
+        #         - 0.5 * track_width * avoid_w
+        #     ) / wheel_radius
+
+        #     right_wheel = (
+        #         avoid_v
+        #         + 0.5 * track_width * avoid_w
+        #     ) / wheel_radius
+
+        #     wheels = np.array([
+        #         left_wheel,
+        #         right_wheel,
+        #     ])
+
+        #     wheels = np.clip(
+        #         wheels,
+        #         -6.67,
+        #         6.67,
+        #     )
+
+        #     write_wheels(
+        #         wheels
+        #     )
+
 
         # ---------------------------------------------------- #
-        # 8. GROUND TRUTH - EVALUATION ONLY
+        # 9. GROUND TRUTH - EVALUATION ONLY
         # ---------------------------------------------------- #
 
         true_pose = get_true_pose(
@@ -765,7 +878,7 @@ try:
 
 
         # ---------------------------------------------------- #
-        # 9. LOGGING
+        # 10. LOGGING
         # ---------------------------------------------------- #
 
         true_history.append(
@@ -790,6 +903,14 @@ try:
 
         obstacle_distance_history.append(
             obstacle_distance
+        )
+
+        obstacle_angle_history.append(
+            obstacle_angle
+        )
+
+        avoidance_history.append(
+            avoidance_active
         )
 
 
@@ -834,6 +955,13 @@ obstacle_distance_history = np.array(
     obstacle_distance_history
 )
 
+obstacle_angle_history = np.array(
+    obstacle_angle_history
+)
+
+avoidance_history = np.array(
+    avoidance_history
+)
 
 # ============================================================ #
 #                         CHECK RUN                            #
@@ -994,23 +1122,39 @@ print(
     estimate_history[-1]
 )
 
+
+#============ Closest Obstacle =============#
+
 print(
     "\nLiDAR:"
 )
 
-finite_obstacles = (
-    obstacle_distance_history[
-        np.isfinite(
-            obstacle_distance_history
-        )
-    ]
+finite_mask = np.isfinite(
+    obstacle_distance_history
 )
 
-if len(finite_obstacles) > 0:
+if np.any(finite_mask):
+
+    valid_indices = np.where(
+        finite_mask
+    )[0]
+
+    closest_index = valid_indices[
+        np.argmin(
+            obstacle_distance_history[
+                valid_indices
+            ]
+        )
+    ]
 
     print(
         f"Closest front obstacle: "
-        f"{np.min(finite_obstacles):.3f} m"
+        f"{obstacle_distance_history[closest_index]:.3f} m"
+    )
+
+    print(
+        f"Obstacle angle at closest point: "
+        f"{np.rad2deg(obstacle_angle_history[closest_index]):.1f} deg"
     )
 
 else:
@@ -1018,3 +1162,12 @@ else:
     print(
         "No front obstacles detected."
     )
+
+print(
+    "\nObstacle avoidance:"
+)
+
+print(
+    f"Active samples: "
+    f"{np.sum(avoidance_history)}"
+)
