@@ -1,40 +1,54 @@
 
 # Sensors-and-Controls
 
-Repository for Integrated Project
+Repository for Integrated Project.
+Group 23:
+    Ethan Griffiths
+    Lachlan Taylor
+    Arnoe Kruger
 
-## Part A modelling
+## Part A: Modelling
 
-See the [modelling and validation study](simulation/PART_A_MODELLING.md) and
-[observability analysis](simulation/PART_A_OBSERVABILITY.md).
+This part describes the TurtleBot3 Burger's planar differential-drive motion and
+how its simulated drive response is identified and checked. The MuJoCo setup and
+drive-identification experiment are in [the navigation scene](integration/scenes/scene_turtlebot3_navigation.xml)
+and [identify_drive.py](simulation/identify_drive.py). See the
+[modelling and validation study](simulation/PART_A_MODELLING.md) and
+[observability analysis](simulation/PART_A_OBSERVABILITY.md) for the assumptions
+and results.
 
-## Sensor calibration
+## Part B: Sensing
 
-The reusable calibration APIs are exported from `sensing`:
+The sensing modules obtain camera images and LiDAR scans from MuJoCo. The camera
+detects ArUco markers and produces range/bearing observations; the LiDAR module
+reads ranges and extracts a front-obstacle measurement. See
+[aruco_camera.py](sensing/aruco_camera.py) and [lidar.py](sensing/lidar.py).
 
-```python
-from sensing import calibrate_camera, calibrate_lidar
+## Part C: Estimation
 
-camera = calibrate_camera(
-    checkerboard_frames, checkerboard_size=(9, 6), square_size_m=0.024
-)
-camera_matrix = camera.camera_matrix
-distortion_coefficients = camera.dist_coeffs
+The Extended Kalman Filter predicts the robot pose from wheel odometry and
+corrects it with camera observations of known markers. Its motion and camera
+models, Jacobians, and update steps are implemented in [ekf.py](estimation/ekf.py);
+the [wheel adapter](simulation/ekf_wheel_adapter.py) provides a prediction-only
+interface for measured wheel samples.
 
-lidar = calibrate_lidar(
-    measured_ranges_m,
-    reference_ranges_m,
-    measured_angles=measured_angles_rad,
-    reference_angles=reference_angles_rad,
-)
-corrected_ranges_m = lidar.apply_ranges(measured_ranges_m)
-corrected_angles_rad = lidar.apply_angles(measured_angles_rad)
-```
+## Part D: Control
 
-Camera calibration requires at least three same-resolution grayscale or
-OpenCV-style BGR images showing a checkerboard; `checkerboard_size` counts
-inner corners as `(columns, rows)`. LiDAR range calibration fits a scale and
-bias from at least two distinct measured distances paired with known distances.
-The optional angle arrays fit a constant angular offset. Both calibration
-results report residual error so the main environment can check calibration
-quality before using the fitted parameters.
+The controller tracks pose-and-velocity references with a discrete-time LQR.
+Terminal controllers add a bounded approach and final-heading phase for reaching
+a goal pose. See [lqr_controller.py](control/lqr_controller.py),
+[terminal_controller.py](control/terminal_controller.py), and the reference
+generator in [trajectory.py](control/trajectory.py). The
+[Part D report](control/PART_D_CONTROL.md) describes the model and limitations.
+
+## Part E: Integration and Robustness
+
+The integrated MuJoCo run connects wheel odometry, camera-based EKF updates,
+LiDAR obstacle detection, trajectory/terminal control, and wheel commands in
+[main.py](integration/main.py). The
+[estimated-pose interface](control/estimated_pose_interface.py) checks pose
+freshness and validity before dispatching commands, while
+[command_gateway.py](control/command_gateway.py) manages expiring wheel-command
+leases. Related interface and gateway checks are in
+[test_estimated_pose_interface.py](tests/test_estimated_pose_interface.py) and
+[test_command_gateway.py](tests/test_command_gateway.py).
