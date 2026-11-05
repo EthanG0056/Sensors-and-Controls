@@ -52,3 +52,20 @@ freshness and validity before dispatching commands, while
 leases. Related interface and gateway checks are in
 [test_estimated_pose_interface.py](tests/test_estimated_pose_interface.py) and
 [test_command_gateway.py](tests/test_command_gateway.py).
+
+## Team member contributions
+
+**Ethan Griffiths:**
+
+- Sensing:
+  - aruco camera
+  - lidar
+  - calibration
+
+**Lachlan Taylor:**
+
+put something here
+
+**Arnoe Kruger:**
+
+put something here
