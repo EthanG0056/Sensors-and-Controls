@@ -3,12 +3,37 @@ from pathlib import Path
 import mujoco
 
 import cv2
+import numpy as np
 
 from sensing.aruco_camera import (
     configure_marker_size_from_geom,
     get_camera_measurement,
     close_camera_renderer,
 )
+
+
+def _associated_camera_observation(result, marker_positions):
+    """Validate the camera-origin API; reject absent/unmapped IDs without fusing.
+
+    Extrinsics remain in the EKF observation model; no body offset is applied here.
+    """
+    if result is None:
+        return None
+    if not isinstance(result, tuple) or len(result) != 2:
+        raise ValueError("Expected (marker_id, measurement)")
+    marker_id, measurement = result
+    if isinstance(marker_id, (bool, np.bool_)) or not isinstance(marker_id, (int, np.integer)):
+        raise ValueError("Expected integer marker ID")
+    measurement = np.asarray(measurement, dtype=float)
+    if (measurement.shape != (2, 1) or not np.isfinite(measurement).all()
+            or measurement[0, 0] <= 0):
+        raise ValueError("Expected finite (2,1) range/bearing with positive range")
+    if marker_id not in marker_positions:
+        return None
+    landmark = np.asarray(marker_positions[marker_id], dtype=float)
+    if landmark.shape != (2,) or not np.isfinite(landmark).all():
+        raise ValueError("Expected finite mapped world landmark (2,)")
+    return int(marker_id), measurement.copy(), landmark.copy()
 
 
 # ========================== MODEL PATH ========================== #
@@ -76,20 +101,28 @@ configure_marker_size_from_geom(
 
 # ========================== CAMERA TEST ========================== #
 
-measurement = get_camera_measurement(
+camera_result = get_camera_measurement(
     model,
     data,
     "front_camera"
 )
 
+# Explicit known-ID map from fixed scene geometry; not robot ground-truth feedback.
+marker_positions = {
+    0: data.geom_xpos[model.geom("aruco_marker").id, :2].copy(),
+    1: data.geom_xpos[model.geom("aruco_marker_1").id, :2].copy(),
+}
+observation = _associated_camera_observation(camera_result, marker_positions)
 print("\nCamera measurement:")
 
-if measurement is None:
+if observation is None:
 
     print("No ArUco marker detected.")
 
 else:
 
+    marker_id, measurement, marker_position = observation
+    print(f"Marker ID: {marker_id}; mapped world landmark: {marker_position}")
     print(
         f"Range: {measurement[0, 0]:.3f} m"
     )

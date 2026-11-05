@@ -1,0 +1,251 @@
+{
+  "python": "3.14.6",
+  "numpy": "2.5.4",
+  "mujoco": "3.17.0",
+  "matplotlib": "3.11.2",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "reset_settle_s": 2,
+  "drive_s": 6,
+  "measurement_window_s": [
+    4,
+    6
+  ],
+  "coarse_dt": 0.002,
+  "fine_dt": 0.001,
+  "levels": {
+    "forward": [
+      [
+        0.04,
+        "train"
+      ],
+      [
+        0.07,
+        "held_out"
+      ],
+      [
+        0.1,
+        "train"
+      ],
+      [
+        0.13,
+        "held_out"
+      ],
+      [
+        0.16,
+        "train"
+      ]
+    ],
+    "turn": [
+      [
+        0.3,
+        "train"
+      ],
+      [
+        0.5,
+        "held_out"
+      ],
+      [
+        0.7,
+        "train"
+      ],
+      [
+        0.9,
+        "held_out"
+      ],
+      [
+        1.1,
+        "train"
+      ]
+    ]
+  },
+  "source_sha256": {
+    "robotis_tb3\\LICENSE": "1eb85fc97224598dad1852b5d6483bbcf0aa8608790dcc657a5a2a761ae9c8c6",
+    "robotis_tb3\\scene_turtlebot3_burger.xml": "a9ffd4ce04009bba3f60246403cdc81195dd97ea6a4f4694fc908895c351942b",
+    "robotis_tb3\\scene_turtlebot3_burger_gain_test.xml": "9c8cc3a43b0f24d157ea17b70679508d4bdd3a8624c60b228a51f89388dfbb6c",
+    "robotis_tb3\\scene_turtlebot3_waffle_pi.xml": "d985661637fb1155c57721a1ab6936bd424ad9155859c73e1f3edc839c1fe4e0",
+    "robotis_tb3\\tb3_burger.png": "5f4381a903c47b497f7b49d0f7ef88637db89d1982841e56c0d6096aad0a3611",
+    "robotis_tb3\\tb3_waffle_pi.png": "0c1140a78e5407188488cd236ac5fb7797d8628c4b878da1e62626d16efd3f54",
+    "robotis_tb3\\turtlebot3_burger.xml": "ace08e8f6e40c7c03d0eb297d3f3222c4d581e887a9e375d8c59d529f7651774",
+    "robotis_tb3\\turtlebot3_burger_gain_test.xml": "cb5f08a81da0b115ad661861ea1447ffe445f351256cc84d5c3119013f4543ec",
+    "robotis_tb3\\turtlebot3_waffle_pi.xml": "72beffd7c802fbd2b45ac94f3ddb1266f8dfb3583102227d158db5201069e8f9",
+    "robotis_tb3\\assets\\burger_base.stl": "7d7f3329a437b43bbcbbec59f9a2d1df1d88b59c3882c543d979baf73670f025",
+    "robotis_tb3\\assets\\lds.stl": "98f0bd7046159f83caab9509293112ef13534368535669124b91b5114c3132f6",
+    "robotis_tb3\\assets\\left_tire.stl": "578c9452ee51c2f71e5e6723b503d784e58a6ac317fa53ee308e645f204c8d6a",
+    "robotis_tb3\\assets\\right_tire.stl": "407aaf271ba7051c6186b220e1dc36b2a6eca688fced66a3347f49747b684596",
+    "robotis_tb3\\assets\\waffle_base.stl": "fcc85458c31f6c4bf2afdc93469128c49723189c5a4c07b8c91baebc132e9a0d",
+    "robotis_tb3\\assets\\waffle_pi_base.stl": "706230121a287ff953c4c84d344014a147fc27615b0e95221aaf04cb0dca7e42",
+    "turtlebot.py": "c63792e4ca770dd8ac0df01ed1f5ec94a7271190f7da7914fc5b88ddd4711980",
+    "validate_drive.py": "d7560d19824211c83d811da42714d57c01fa6afea88a07d2ab2c65c4e84f3594",
+    "identify_drive.py": "e7177f2d63e8b108737b0a2635cf3828cafb98de9f148e37a3d702a8ec464fb2"
+  },
+  "models": [
+    {
+      "gain": 0.1,
+      "mode": "forward",
+      "coefficient": 0.02660170904919977,
+      "coefficient_units": "m/rad",
+      "trial_ratio_min": 0.022260520270619612,
+      "trial_ratio_max": 0.028826702849822708,
+      "servo": [
+        {
+          "slope": 1.001948922818649,
+          "deadzone_rad_s": 1.5975757575757576,
+          "train_rmse": 0.03479335739884203
+        },
+        {
+          "slope": 1.0183559844095833,
+          "deadzone_rad_s": 1.5660606060606062,
+          "train_rmse": 0.0425158797895133
+        }
+      ],
+      "held_out": {
+        "measured_wheel_prediction": {
+          "rmse": 0.0013422433835126582,
+          "bias": 0.0005349197487799222,
+          "max_abs": 0.0023730010736691676
+        },
+        "command_prediction": {
+          "rmse": 0.001359060675958611,
+          "bias": 0.00045962199204794673,
+          "max_abs": 0.0021939318410374303
+        },
+        "nominal_measured_wheel_prediction": {
+          "rmse": 0.011894746322392987,
+          "bias": 0.000553030500785469,
+          "max_abs": 0.0176544980922579
+        },
+        "ideal_command_prediction": {
+          "rmse": 0.061550482523163835,
+          "bias": 0.00045962199204794413,
+          "max_abs": 0.06883823207822853
+        }
+      }
+    },
+    {
+      "gain": 0.1,
+      "mode": "turn",
+      "coefficient": 0.1542065919306527,
+      "coefficient_units": "rad/rad",
+      "trial_ratio_min": 0.1472285647823431,
+      "trial_ratio_max": 0.16724236887044758,
+      "servo": [
+        {
+          "slope": 0.9291343192962532,
+          "deadzone_rad_s": 1.390666666666667,
+          "train_rmse": 0.009031600335431897
+        },
+        {
+          "slope": 0.9346749855352363,
+          "deadzone_rad_s": 1.3920000000000001,
+          "train_rmse": 0.008730484239367006
+        }
+      ],
+      "held_out": {
+        "measured_wheel_prediction": {
+          "rmse": 0.016941204267451614,
+          "bias": -9.664274284689953e-05,
+          "max_abs": 0.024150615075811316
+        },
+        "command_prediction": {
+          "rmse": 0.01740264911725102,
+          "bias": -0.0006618288948323668,
+          "max_abs": 0.019137128066792113
+        },
+        "nominal_measured_wheel_prediction": {
+          "rmse": 0.03555000168284128,
+          "bias": 9.410275755396269e-05,
+          "max_abs": 0.05002563379149555
+        },
+        "ideal_command_prediction": {
+          "rmse": 0.5759276545580967,
+          "bias": -0.0006618288948323781,
+          "max_abs": 0.6586990596217861
+        }
+      }
+    },
+    {
+      "gain": 1.0,
+      "mode": "forward",
+      "coefficient": 0.026073519607207638,
+      "coefficient_units": "m/rad",
+      "trial_ratio_min": 0.025656432501670517,
+      "trial_ratio_max": 0.029723127096751047,
+      "servo": [
+        {
+          "slope": 1.000230133966663,
+          "deadzone_rad_s": 0.15757575757575756,
+          "train_rmse": 0.0009469395078110848
+        },
+        {
+          "slope": 1.0000962589698548,
+          "deadzone_rad_s": 0.15757575757575756,
+          "train_rmse": 0.0009158698316206715
+        }
+      ],
+      "held_out": {
+        "measured_wheel_prediction": {
+          "rmse": 0.0025339127550455536,
+          "bias": 0.0020077455904079743,
+          "max_abs": 0.0038472225090915163
+        },
+        "command_prediction": {
+          "rmse": 0.002587119821872592,
+          "bias": 0.0020303180455305287,
+          "max_abs": 0.003976000498188692
+        },
+        "nominal_measured_wheel_prediction": {
+          "rmse": 0.019872984731587596,
+          "bias": 0.0020017491744971586,
+          "max_abs": 0.02801239698452135
+        },
+        "ideal_command_prediction": {
+          "rmse": 0.02473610680568911,
+          "bias": 0.0020303180455305287,
+          "max_abs": 0.03318203065230052
+        }
+      }
+    },
+    {
+      "gain": 1.0,
+      "mode": "turn",
+      "coefficient": 0.15672537223810248,
+      "coefficient_units": "rad/rad",
+      "trial_ratio_min": 0.1514678037238793,
+      "trial_ratio_max": 0.18008131134252947,
+      "servo": [
+        {
+          "slope": 0.9983295811311983,
+          "deadzone_rad_s": 0.14400000000000002,
+          "train_rmse": 0.0011660657453344892
+        },
+        {
+          "slope": 0.9990841342379697,
+          "deadzone_rad_s": 0.14400000000000002,
+          "train_rmse": 0.001236308194020402
+        }
+      ],
+      "held_out": {
+        "measured_wheel_prediction": {
+          "rmse": 0.0322502454507304,
+          "bias": -0.0010575234698190078,
+          "max_abs": 0.040639368468480375
+        },
+        "command_prediction": {
+          "rmse": 0.032714137893457035,
+          "bias": -0.001106070130686962,
+          "max_abs": 0.04087467763903163
+        },
+        "nominal_measured_wheel_prediction": {
+          "rmse": 0.19301648936210716,
+          "bias": -0.00104218290769921,
+          "max_abs": 0.24214837195726913
+        },
+        "ideal_command_prediction": {
+          "rmse": 0.2519031546055793,
+          "bias": -0.001106070130686962,
+          "max_abs": 0.30294505337042277
+        }
+      }
+    }
+  ]
+}

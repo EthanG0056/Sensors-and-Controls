@@ -11,6 +11,7 @@ import argparse
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 import cv2
 import matplotlib.pyplot as plt
@@ -129,9 +130,16 @@ def _camera_calibration(model, data):
         "marker_panel",
         (1, 2),
     )
-    measurement = aruco_camera.get_camera_measurement(model, data, CAMERA_NAME)
-    if measurement is None:
+    result = aruco_camera.get_camera_measurement(model, data, CAMERA_NAME)
+    if result is None:
         raise AssertionError("Calibration marker was not visible to the camera")
+    observed_marker_id, measurement = result
+    if observed_marker_id != MARKER_ID:
+        raise ValueError("Unknown marker in single-landmark calibration fixture")
+    measurement = np.asarray(measurement, dtype=float)
+    if (measurement.shape != (2, 1) or not np.isfinite(measurement).all()
+            or measurement[0, 0] <= 0):
+        raise ValueError("Expected finite (2,1) range/bearing with positive range")
 
     width = int(model.vis.global_.offwidth)
     height = int(model.vis.global_.offheight)
@@ -168,6 +176,8 @@ def _camera_calibration(model, data):
     if detection is None:
         raise AssertionError("Calibration marker was not detected in the camera image")
     marker_id, observed_corners = detection
+    if marker_id != observed_marker_id:
+        raise ValueError("Calibration render marker identity changed")
     tvec, rvec = aruco_camera.estimate_marker_pose(
         observed_corners,
         camera_matrix,
@@ -252,6 +262,17 @@ class SensorCalibrationTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         aruco_camera.close_camera_renderer()
+
+    def test_camera_api_rejects_missing_unknown_or_invalid_measurements(self):
+        cases = [None, (MARKER_ID + 1, np.array([[1.], [0.]])),
+                 (MARKER_ID, np.array([1., 0.])),
+                 (MARKER_ID, np.array([[np.nan], [0.]])),
+                 (MARKER_ID, np.array([[1.], [np.inf]]))]
+        for result in cases:
+            with self.subTest(result=result), patch.object(
+                    aruco_camera, "get_camera_measurement", return_value=result):
+                with self.assertRaises((ValueError, AssertionError)):
+                    _camera_calibration(self.model, self.data)
 
     def test_camera_range_bearing_and_marker_reprojection(self):
         result = _camera_calibration(self.model, self.data)

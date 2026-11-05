@@ -16,6 +16,30 @@ from sensing.aruco_camera import (
 )
 
 
+def _associated_camera_observation(result, marker_positions):
+    """Validate the camera-origin API; reject absent/unmapped IDs without fusing.
+
+    Extrinsics remain in the EKF observation model; no body offset is applied here.
+    """
+    if result is None:
+        return None
+    if not isinstance(result, tuple) or len(result) != 2:
+        raise ValueError("Expected (marker_id, measurement)")
+    marker_id, measurement = result
+    if isinstance(marker_id, (bool, np.bool_)) or not isinstance(marker_id, (int, np.integer)):
+        raise ValueError("Expected integer marker ID")
+    measurement = np.asarray(measurement, dtype=float)
+    if (measurement.shape != (2, 1) or not np.isfinite(measurement).all()
+            or measurement[0, 0] <= 0):
+        raise ValueError("Expected finite (2,1) range/bearing with positive range")
+    if marker_id not in marker_positions:
+        return None
+    landmark = np.asarray(marker_positions[marker_id], dtype=float)
+    if landmark.shape != (2,) or not np.isfinite(landmark).all():
+        raise ValueError("Expected finite mapped world landmark (2,)")
+    return int(marker_id), measurement.copy(), landmark.copy()
+
+
 # ============================================================ #
 #                         PARAMETERS                           #
 # ============================================================ #
@@ -264,19 +288,22 @@ for step in range(STEPS):
     # EKF UPDATE - REAL RENDERED ARUCO MEASUREMENT
     # -------------------------------------------------------- #
 
-    measurement = get_camera_measurement(
+    camera_result = get_camera_measurement(
         model,
         data,
         "front_camera",
     )
 
-    camera_visible = measurement is not None
+    # This diagnostic has only marker 0 mapped. Never fuse marker 1 as marker 0.
+    observation = _associated_camera_observation(camera_result, {0: MARKER_POSITION})
+    camera_visible = observation is not None
 
     if camera_visible:
+        marker_id, measurement, marker_position = observation
 
         ekf.update_camera(
             measurement,
-            MARKER_POSITION,
+            marker_position,
             CAMERA_OFFSET,
             CAMERA_YAW_OFFSET,
         )

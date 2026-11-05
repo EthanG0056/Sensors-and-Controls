@@ -1,1300 +1,207 @@
+"""Team navigation wiring with independent expiry and conservative motion gating.
+
+Run `python -B -m integration.main`. Default: no justified quality policy, NO
+motion. Rendering and estimation can be diagnosed but are not localisation proof.
+Programmatic run(criteria=...) requires experiment-specific justified criteria;
+there is no CLI switch that silently substitutes an always-true policy.
+
+MuJoCo access belongs exclusively to OwnerSession's spawned process. Camera/PnP,
+EKF and existing supervisor remain in the receiver. No terminal clearance authority
+exists: trajectory completion disarms BEFORE terminal invocation. Existing standalone
+tracking/docking benchmarks are separate and unchanged. No evidence files are saved.
+"""
+from dataclasses import replace
 from pathlib import Path
 import sys
-if __package__ in (None, ""):
+import time
+
+if __package__ in (None, ''):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from pathlib import Path
-
-import mujoco
 import numpy as np
 
-from estimation.ekf import (
-    TurtleBotEKF,
-    wheel_odometry,
-    wrap,
-)
-
-from sensing.aruco_camera import (
-    configure_marker_size_from_geom,
-    get_camera_measurement,
-    close_camera_renderer,
-)
-
-from sensing.lidar import (
-    get_lidar_ranges,
-    get_front_obstacle,
-)
-
-from control.command_gateway import CommandGateway
-
-from control.terminal_controller import (
-    TerminalParameters,
-)
-
-from control.staged_terminal_controller import (
-    StagedTrajectoryTerminalController,
-)
-
-from control.estimated_pose_interface import (
-    PoseEstimate,
-    InterfacePolicy,
-    EstimatedPoseInterface,
-    ClearanceGrant,
-)
-
-from control.trajectory import (
-    reference,
-    DURATIONS,
-)
-
-
-# ============================================================ #
-#                         PARAMETERS                           #
-# ============================================================ #
-
-DT = 0.05
-
-TRAJECTORY_NAME = "straight"
-
-DURATION = DURATIONS[
-    TRAJECTORY_NAME
-]
-
-TERMINAL_TIME = 45.0
-
-TOTAL_DURATION = (
-    DURATION
-    + TERMINAL_TIME
-)
-
-STEPS = int(
-    TOTAL_DURATION / DT
-)
-
-CAMERA_OFFSET = (
-    0.05,
-    0.0,
-)
-
-CAMERA_YAW_OFFSET = 0.0
-
-ESTIMATOR_EPOCH = "integration_run_1"
-
-WORLD_FRAME = "map"
-
-BODY_FRAME = "base"
-
-TASK_ID = "straight_tracking_test"
-
-
-# ============================================================ #
-#                       INTEGRATION CLOCK                      #
-# ============================================================ #
-
-class IntegrationClock:
-
-    def __init__(self):
-        self.time = 0.0
-
-    def __call__(self):
-        return self.time
-
-    def advance(self, dt):
-        self.time += dt
-
-
-integration_clock = IntegrationClock()
-
-
-# ============================================================ #
-#                         MODEL PATH                           #
-# ============================================================ #
-
-ROOT = Path(__file__).resolve().parents[1]
-
-MODEL_PATH = (
-    ROOT
-    / "integration"
-    / "scenes"
-    / "scene_turtlebot3_navigation.xml"
-)
-
-
-# ============================================================ #
-#                    MUJOCO HELPER FUNCTIONS                   #
-# ============================================================ #
-
-def get_wheel_speeds(model, data):
-
-    left_joint = model.joint(
-        "wheel_left"
-    ).id
-
-    right_joint = model.joint(
-        "wheel_right"
-    ).id
-
-    left_dof = model.jnt_dofadr[
-        left_joint
-    ]
-
-    right_dof = model.jnt_dofadr[
-        right_joint
-    ]
-
-    left_speed = data.qvel[
-        left_dof
-    ]
-
-    right_speed = data.qvel[
-        right_dof
-    ]
-
-    return (
-        left_speed,
-        right_speed,
-    )
-
-
-def get_true_pose(model, data):
-
-    # Ground truth is ONLY used for evaluation.
-
-    base_joint = model.joint(
-        "base_joint"
-    ).id
-
-    address = model.jnt_qposadr[
-        base_joint
-    ]
-
-    x = data.qpos[
-        address
-    ]
-
-    y = data.qpos[
-        address + 1
-    ]
-
-    qw = data.qpos[
-        address + 3
-    ]
-
-    qx = data.qpos[
-        address + 4
-    ]
-
-    qy = data.qpos[
-        address + 5
-    ]
-
-    qz = data.qpos[
-        address + 6
-    ]
-
-    yaw = np.arctan2(
-        2.0 * (
-            qw * qz
-            + qx * qy
-        ),
-        1.0 - 2.0 * (
-            qy**2
-            + qz**2
-        ),
-    )
-
-    return np.array([
-        x,
-        y,
-        wrap(yaw),
-    ])
-
-
-# ============================================================ #
-#                  LOCALISATION QUALITY CHECK                  #
-# ============================================================ #
-
-def localisation_quality(
-    previous,
-    current,
-):
-
-    # Diagnostic integration limits.
-    #
-    # These are deliberately conservative compared with the
-    # localisation performance already demonstrated in the
-    # MuJoCo benchmarks.
-
-    std = np.sqrt(
-        np.diag(
-            current.covariance
-        )
-    )
-
-    # Reject very uncertain localisation.
-    if std[0] > 0.15:
-        return False
-
-    if std[1] > 0.15:
-        return False
-
-    if std[2] > np.deg2rad(15.0):
-        return False
-
-    # On the first sample there is no previous accepted estimate.
-    if previous is None:
-        return True
-
-    position_jump = np.linalg.norm(
-        current.pose[:2]
-        - previous.pose[:2]
-    )
-
-    heading_jump = abs(
-        wrap(
-            current.pose[2]
-            - previous.pose[2]
-        )
-    )
-
-    # Reject implausibly large estimate jumps between 20 Hz samples.
-    if position_jump > 0.05:
-        return False
-
-    if heading_jump > np.deg2rad(20.0):
-        return False
-
-    return True
-
-
-# ============================================================ #
-#                         LOAD MODEL                           #
-# ============================================================ #
-
-model = mujoco.MjModel.from_xml_path(
-    str(MODEL_PATH)
-)
-
-data = mujoco.MjData(
-    model
-)
-
-mujoco.mj_forward(
-    model,
-    data
-)
-
-
-# ============================================================ #
-#                      SIMULATION TIMING                       #
-# ============================================================ #
-
-simulation_dt = model.opt.timestep
-
-substeps = round(
-    DT
-    / simulation_dt
-)
-
-if not np.isclose(
-    substeps * simulation_dt,
-    DT,
-):
-    raise ValueError(
-        "DT must be an integer multiple "
-        "of the MuJoCo timestep"
-    )
-
-
-# ============================================================ #
-#                          ACTUATORS                           #
-# ============================================================ #
-
-left_actuator = model.actuator(
-    "wheel_left"
-).id
-
-right_actuator = model.actuator(
-    "wheel_right"
-).id
-
-
-def write_wheels(wheels):
-
-    # This function is now the ONLY place in this integration
-    # program allowed to write actuator commands.
-
-    left, right = wheels
-
-    data.ctrl[
-        left_actuator
-    ] = left
-
-    data.ctrl[
-        right_actuator
-    ] = right
-
-
-# ============================================================ #
-#                       ARUCO MARKER                           #
-# ============================================================ #
-
-configure_marker_size_from_geom(
-    model,
-    "aruco_marker",
-    (1, 2),
-)
-
-# Marker 0 - charging station
-
-marker_0_geom_id = model.geom(
-    "aruco_marker"
-).id
-
-MARKER_POSITION = data.geom_xpos[
-    marker_0_geom_id,
-    :2
-].copy()
-
-
-# Marker 1 - room landmark
-
-marker_1_geom_id = model.geom(
-    "aruco_marker_1"
-).id
-
-MARKER_1_POSITION = data.geom_xpos[
-    marker_1_geom_id,
-    :2
-].copy()
-
-
-# Known landmark map
-
-MARKER_POSITIONS = {
-    0: MARKER_POSITION,
-    1: MARKER_1_POSITION,
-}
-
-
-print(
-    "Marker 0 position:",
-    MARKER_POSITION
-)
-
-print(
-    "Marker 1 position:",
-    MARKER_1_POSITION
-)
-
-
-# ============================================================ #
-#                          EKF SETUP                           #
-# ============================================================ #
-
-initial_state = np.array([
-    0.0,
-    0.0,
-    0.0,
-])
-
-P0 = np.diag([
-    0.05**2,
-    0.05**2,
-    np.deg2rad(5.0)**2,
-])
-
-Q = np.diag([
-    0.005**2,
-    0.005**2,
-    np.deg2rad(0.5)**2,
-])
-
-R = np.diag([
-    0.03**2,
-    np.deg2rad(1.5)**2,
-])
-
-ekf = TurtleBotEKF(
-    initial_state,
-    P0,
-    Q,
-    R,
-)
-
-
-# ============================================================ #
-#                     CONTROLLER SETUP                         #
-# ============================================================ #
-
-parameters = TerminalParameters(
-    sample_time=DT
-)
-
-DOCKING_DISTANCE = 0.30
-
-goal = np.array([
-    MARKER_POSITION[0] - DOCKING_DISTANCE,
-    MARKER_POSITION[1],
-    0.0,
-])
-
-print(
-    "Docking goal:",
-    goal
-)
-
-
-def supervisor_factory():
-
-    return StagedTrajectoryTerminalController(
-        goal,
-        DURATION,
-        parameters=parameters,
-    )
-
-
-# ============================================================ #
-#                     COMMAND GATEWAY                          #
-# ============================================================ #
-
-gateway = CommandGateway(
-    write_wheels,
-    max_lease_s=0.25,
-    clock=integration_clock,
-)
-
-
-# ============================================================ #
-#                   ESTIMATED POSE POLICY                      #
-# ============================================================ #
-
-policy = InterfacePolicy(
-    frame_id=WORLD_FRAME,
-    body_frame_id=BODY_FRAME,
-
-    # Wall-clock freshness limits for this integration test.
-    max_age_s=0.50,
-
-    # Wheel commands expire quickly if updates stop.
-    command_ttl_s=0.20,
-
-    # State time must remain on the 20 Hz controller grid.
-    clock_grid_tolerance_s=1e-6,
-
-    sample_time=DT,
-
-    quality_check=localisation_quality,
-)
-
-
-# ============================================================ #
-#                   ESTIMATED POSE INTERFACE                   #
-# ============================================================ #
-
-interface = EstimatedPoseInterface(
-    gateway,
-    supervisor_factory,
-    policy,
-    goal=goal,
-    task_id=TASK_ID,
-    terminal_start_s=DURATION,
-    parameters=parameters,
-    clock=integration_clock,
-)
-
-
-# ============================================================ #
-#                         ARM SYSTEM                           #
-# ============================================================ #
-
-# The first EKF estimate is produced after the first 0.05 s
-# simulation interval, so the state-time origin is DT.
-
-arm_result = interface.arm(
-    epoch=ESTIMATOR_EPOCH,
-    state_time_origin=DT,
-)
-
-if not arm_result.accepted:
-
-    raise RuntimeError(
-        "Could not arm interface: "
-        + arm_result.reason
-    )
-
-print(
-    "Interface armed successfully."
-)
-
-
-# ============================================================ #
-#                           HISTORY                            #
-# ============================================================ #
-
-true_history = []
-
-estimate_history = []
-
-reference_history = []
-
-camera_visible_history = []
-
-controller_mode_history = []
-
-obstacle_distance_history = []
-
-obstacle_angle_history = []
-
-avoidance_history = []
-
-
-marker_detection_counts = {
-    0: 0,
-    1: 0,
-}
-
-
-# ============================================================ #
-#                       INTEGRATION LOOP                       #
-# ============================================================ #
-
-try:
-
-    for step in range(STEPS):
-
-
-        # ---------------------------------------------------- #
-        # 1. ADVANCE MUJOCO USING PREVIOUS GATEWAY COMMAND
-        # ---------------------------------------------------- #
-
-        for _ in range(substeps):
-
-            mujoco.mj_step(
-                model,
-                data
-            )
-
-        integration_clock.advance(
-            DT
-        )
-        
-        state_time = (
-            step + 1
-        ) * DT
-
-
-        # ---------------------------------------------------- #
-        # 2. READ MEASURED WHEEL VELOCITIES
-        # ---------------------------------------------------- #
-
-        left_measured, right_measured = (
-            get_wheel_speeds(
-                model,
-                data
-            )
-        )
-
-
-        # ---------------------------------------------------- #
-        # 3. EKF PREDICTION
-        # ---------------------------------------------------- #
-
-        body_motion = wheel_odometry(
-            left_measured,
-            right_measured
-        )
-
-        ekf.predict(
-            body_motion,
-            DT
-        )
-
-
-        # ---------------------------------------------------- #
-        # 4. EKF CAMERA UPDATE
-        # ---------------------------------------------------- #
-
-        camera_result = get_camera_measurement(
-            model,
-            data,
-            "front_camera",
-        )
-
-        camera_visible = (
-            camera_result is not None
-        )
-
-        if camera_visible:
-
-            marker_id, measurement = (
-                camera_result
-            )
-
-            if marker_id in MARKER_POSITIONS:
-
-                marker_detection_counts[
-                    marker_id
-                ] += 1
-
-                marker_position = (
-                    MARKER_POSITIONS[
-                        marker_id
-                    ]
-                )
-
-                ekf.update_camera(
-                    measurement,
-                    marker_position,
-                    CAMERA_OFFSET,
-                    CAMERA_YAW_OFFSET,
-                )
-
-
-        # ---------------------------------------------------- #
-        # 5. LIDAR OBSTACLE DETECTION
-        # ---------------------------------------------------- #
-
-        lidar_ranges = get_lidar_ranges(
-            model,
-            data,
-        )
-
-        front_obstacle = get_front_obstacle(
-            lidar_ranges
-        )
-
-        if front_obstacle is not None:
-
-            obstacle_distance, obstacle_angle = (
-                front_obstacle
-            )
-
-        else:
-
-            obstacle_distance = np.inf
-            obstacle_angle = 0.0
-
-
-        # ---------------------------------------------------- #
-        # 6. SIMPLE OBSTACLE AVOIDANCE OVERRIDE
-        # ---------------------------------------------------- #
-
-        AVOID_DISTANCE = 0.4
-
-        avoidance_active = (
-            state_time < DURATION
-            and obstacle_distance < AVOID_DISTANCE
-        )
-
-
-        # ---------------------------------------------------- #
-        # 7. CREATE ESTIMATED-STATE SNAPSHOT
-        # ---------------------------------------------------- #
-
-        snapshot = PoseEstimate(
-            pose=ekf.state.copy(),
-
-            covariance=ekf.P.copy(),
-
-            state_time=state_time,
-
-            sample_monotonic=integration_clock(),
-
-            sequence=step,
-
-            epoch=ESTIMATOR_EPOCH,
-
-            frame_id=WORLD_FRAME,
-
-            body_frame_id=BODY_FRAME,
-
-            localisation_valid=True,
-
-            validity_reason="EKF operating normally",
-        )
-
-        
-        # ---------------------------------------------------- #
-        # 8. SEND ESTIMATE THROUGH REAL CONTROL INTERFACE
-        # ---------------------------------------------------- #
-
-        def reference_provider(t):
-
-            normal_reference = reference(
-                TRAJECTORY_NAME,
-                t
-            )
-
-            if not avoidance_active:
-                return normal_reference
-
-            # Current estimated robot pose.
-            x, y, theta = ekf.state
-
-            # Unit vectors in the robot's forward and left directions.
-            forward = np.array([
-                np.cos(theta),
-                np.sin(theta),
-            ])
-
-            left = np.array([
-                -np.sin(theta),
-                np.cos(theta),
-            ])
-
-            # Move forward while stepping sideways away from the obstacle.
-            forward_offset = 0.25
-            lateral_offset = 0.20
-
-            # Obstacle on left -> detour right.
-            if obstacle_angle > 0.0:
-
-                target_xy = (
-                    ekf.state[:2]
-                    + forward_offset * forward
-                    - lateral_offset * left
-                )
-
-                target_heading = wrap(
-                    theta
-                    - np.deg2rad(20.0)
-                )
-
-            # Obstacle on right -> detour left.
-            else:
-
-                target_xy = (
-                    ekf.state[:2]
-                    + forward_offset * forward
-                    + lateral_offset * left
-                )
-
-                target_heading = wrap(
-                    theta
-                    + np.deg2rad(20.0)
-                )
-
-            avoidance_pose = np.array([
-                target_xy[0],
-                target_xy[1],
-                target_heading,
-            ])
-
-            return type(normal_reference)(
-                pose=avoidance_pose,
-                input=np.array([
-                    0.05,
-                    0.0,
-                ]),
-            )
-
-
-        clearance = None
-
-        if state_time >= DURATION:
-
-            clearance = ClearanceGrant(
-                grant_id="terminal_test_clearance",
-                task_id=TASK_ID,
-                frame_id=WORLD_FRAME,
-                estimator_epoch=ESTIMATOR_EPOCH,
-                valid_from=0.0,
-                expires_at=TOTAL_DURATION + 5.0,
-                approved=True,
-                covers_terminal_manoeuvre=True,
-                revoked=False,
-            )
-
-
-        result = interface.step(
-            snapshot,
-            reference_provider,
-            clearance=clearance,
-        )
-
-
-        if not result.accepted:
-
-            print(
-                "\nInterface rejected command:"
-            )
-
-            print(
-                result.reason
-            )
-
-            break
-
-        # if avoidance_active:
-
-        #     wheel_radius = 0.033
-        #     track_width = 0.160
-
-        #     left_wheel = (
-        #         avoid_v
-        #         - 0.5 * track_width * avoid_w
-        #     ) / wheel_radius
-
-        #     right_wheel = (
-        #         avoid_v
-        #         + 0.5 * track_width * avoid_w
-        #     ) / wheel_radius
-
-        #     wheels = np.array([
-        #         left_wheel,
-        #         right_wheel,
-        #     ])
-
-        #     wheels = np.clip(
-        #         wheels,
-        #         -6.67,
-        #         6.67,
-        #     )
-
-        #     write_wheels(
-        #         wheels
-        #     )
-
-
-        # ---------------------------------------------------- #
-        # 9. GROUND TRUTH - EVALUATION ONLY
-        # ---------------------------------------------------- #
-
-        true_pose = get_true_pose(
-            model,
-            data
-        )
-
-        current_reference = reference(
-            TRAJECTORY_NAME,
-            state_time,
-        )
-
-
-        # ---------------------------------------------------- #
-        # 10. LOGGING
-        # ---------------------------------------------------- #
-
-        true_history.append(
-            true_pose.copy()
-        )
-
-        estimate_history.append(
-            ekf.state.copy()
-        )
-
-        reference_history.append(
-            current_reference.pose.copy()
-        )
-
-        camera_visible_history.append(
-            camera_visible
-        )
-
-        controller_mode_history.append(
-            result.controller_mode
-        )
-
-        obstacle_distance_history.append(
-            obstacle_distance
-        )
-
-        obstacle_angle_history.append(
-            obstacle_angle
-        )
-
-        avoidance_history.append(
-            avoidance_active
-        )
-
-
-        # ---------------------------------------------------- #
-        # 11. CHECK FOR COMPLETED DOCKING
-        # ---------------------------------------------------- #
-
-        if result.estimated_stop_qualified:
-
-            print(
-                "\nDocking stop qualified."
-            )
-
-            break
-
-
-finally:
-
-    stop_result = interface.disarm(
-        "integration_complete"
-    )
-
-    close_camera_renderer()
-
-    print(
-        "\nSystem disarmed:"
-    )
-
-    print(
-        stop_result.reason
-    )
-
-
-# ============================================================ #
-#                         CONVERT LOGS                         #
-# ============================================================ #
-
-true_history = np.array(
-    true_history
-)
-
-estimate_history = np.array(
-    estimate_history
-)
-
-reference_history = np.array(
-    reference_history
-)
-
-camera_visible_history = np.array(
-    camera_visible_history
-)
-
-obstacle_distance_history = np.array(
-    obstacle_distance_history
-)
-
-obstacle_angle_history = np.array(
-    obstacle_angle_history
-)
-
-avoidance_history = np.array(
-    avoidance_history
-)
-
-# ============================================================ #
-#                         CHECK RUN                            #
-# ============================================================ #
-
-if len(true_history) == 0:
-
-    raise RuntimeError(
-        "No control samples completed."
-    )
-
-
-# ============================================================ #
-#                    LOCALISATION ERROR                        #
-# ============================================================ #
-
-localisation_error = (
-    true_history
-    - estimate_history
-)
-
-localisation_error[:, 2] = np.array([
-    wrap(angle)
-    for angle in localisation_error[:, 2]
-])
-
-localisation_position_rmse = np.sqrt(
-    np.mean(
-        localisation_error[:, 0]**2
-        + localisation_error[:, 1]**2
-    )
-)
-
-localisation_heading_rmse = np.sqrt(
-    np.mean(
-        localisation_error[:, 2]**2
-    )
-)
-
-
-# ============================================================ #
-#                    NAVIGATION METRICS                        #
-# ============================================================ #
-
-tracking_samples = int(
-    DURATION / DT
-)
-
-tracking_true = true_history[
-    :tracking_samples
-]
-
-tracking_reference = reference_history[
-    :tracking_samples
-]
-
-tracking_error = (
-    tracking_reference
-    - tracking_true
-)
-
-tracking_error[:, 2] = np.array([
-    wrap(angle)
-    for angle in tracking_error[:, 2]
-])
-
-tracking_position_rmse = np.sqrt(
-    np.mean(
-        tracking_error[:, 0]**2
-        + tracking_error[:, 1]**2
-    )
-)
-
-tracking_heading_rmse = np.sqrt(
-    np.mean(
-        tracking_error[:, 2]**2
-    )
-)
-
-
-# ============================================================ #
-#                       DOCKING METRICS                        #
-# ============================================================ #
-
-true_docking_error = (
-    goal
-    - true_history[-1]
-)
-
-true_docking_error[2] = wrap(
-    true_docking_error[2]
-)
-
-estimated_docking_error = (
-    goal
-    - estimate_history[-1]
-)
-
-estimated_docking_error[2] = wrap(
-    estimated_docking_error[2]
-)
-
-true_docking_position_error = np.linalg.norm(
-    true_docking_error[:2]
-)
-
-true_docking_heading_error = abs(
-    true_docking_error[2]
-)
-
-estimated_docking_position_error = np.linalg.norm(
-    estimated_docking_error[:2]
-)
-
-estimated_docking_heading_error = abs(
-    estimated_docking_error[2]
-)
-
-docking_samples = (
-    len(true_history)
-    - tracking_samples
-)
-
-docking_duration = (
-    docking_samples
-    * DT
-)
-
-
-# ============================================================ #
-#                           RESULTS                            #
-# ============================================================ #
-
-print(
-    "\n================ FULL INTERFACE RESULTS ================"
-)
-
-print(
-    f"Completed samples: "
-    f"{len(true_history)}/{STEPS}"
-)
-
-
-# ============================================================ #
-#                     LOCALISATION RESULTS                     #
-# ============================================================ #
-
-print(
-    "\n---------------- LOCALISATION ----------------"
-)
-
-print(
-    f"Position RMSE: "
-    f"{localisation_position_rmse:.4f} m"
-)
-
-print(
-    f"Heading RMSE: "
-    f"{np.rad2deg(localisation_heading_rmse):.2f} deg"
-)
-
-
-# ============================================================ #
-#                 NAVIGATION TRACKING RESULTS                  #
-# ============================================================ #
-
-print(
-    "\n------------- NAVIGATION TRACKING -------------"
-)
-
-print(
-    f"Position RMSE: "
-    f"{tracking_position_rmse:.4f} m"
-)
-
-print(
-    f"Heading RMSE: "
-    f"{np.rad2deg(tracking_heading_rmse):.2f} deg"
-)
-
-
-# ============================================================ #
-#                       DOCKING RESULTS                        #
-# ============================================================ #
-
-print(
-    "\n------------------ DOCKING -------------------"
-)
-
-print(
-    f"Goal pose: "
-    f"{goal}"
-)
-
-print(
-    f"True final position error: "
-    f"{true_docking_position_error:.4f} m"
-)
-
-print(
-    f"True final heading error: "
-    f"{np.rad2deg(true_docking_heading_error):.2f} deg"
-)
-
-print(
-    f"Estimated final position error: "
-    f"{estimated_docking_position_error:.4f} m"
-)
-
-print(
-    f"Estimated final heading error: "
-    f"{np.rad2deg(estimated_docking_heading_error):.2f} deg"
-)
-
-print(
-    f"Docking duration: "
-    f"{docking_duration:.2f} s"
-)
-
-
-# ============================================================ #
-#                    SENSOR RESULTS                            #
-# ============================================================ #
-
-print(
-    "\n------------------- CAMERA -------------------"
-)
-
-print(
-    f"Detections: "
-    f"{np.sum(camera_visible_history)}"
-    f"/{len(camera_visible_history)}"
-)
-
-print(
-    f"Marker 0 detections: "
-    f"{marker_detection_counts[0]}"
-)
-
-print(
-    f"Marker 1 detections: "
-    f"{marker_detection_counts[1]}"
-)
-
-print(
-    "\n-------------------- LIDAR -------------------"
-)
-
-finite_mask = np.isfinite(
-    obstacle_distance_history
-)
-
-if np.any(finite_mask):
-
-    valid_indices = np.where(
-        finite_mask
-    )[0]
-
-    closest_index = valid_indices[
-        np.argmin(
-            obstacle_distance_history[
-                valid_indices
-            ]
-        )
-    ]
-
-    print(
-        f"Closest front obstacle: "
-        f"{obstacle_distance_history[closest_index]:.3f} m"
-    )
-
-    print(
-        f"Obstacle angle at closest point: "
-        f"{np.rad2deg(obstacle_angle_history[closest_index]):.1f} deg"
-    )
-
-else:
-
-    print(
-        "No front obstacles detected."
-    )
-
-
-print(
-    f"Obstacle avoidance active samples: "
-    f"{np.sum(avoidance_history)}"
-)
-
-
-# ============================================================ #
-#                    FINAL SYSTEM STATE                        #
-# ============================================================ #
-
-print(
-    "\n--------------- FINAL SYSTEM STATE ---------------"
-)
-
-print(
-    "Final navigation reference:"
-)
-
-print(
-    reference_history[-1]
-)
-
-print(
-    "Docking goal:"
-)
-
-print(
-    goal
-)
-
-print(
-    "Final true pose:"
-)
-
-print(
-    true_history[-1]
-)
-
-print(
-    "Final EKF pose:"
-)
-
-print(
-    estimate_history[-1]
-)
+from estimation.ekf import TurtleBotEKF, wheel_odometry, wrap
+from sensing.aruco_camera import (configure_marker_size, detect_aruco_marker,
+                                 estimate_marker_pose, get_range_and_bearing)
+from sensing.lidar import get_front_obstacle
+from control.estimated_pose_interface import PoseEstimate, InterfacePolicy, EstimatedPoseInterface
+from control.terminal_controller import TerminalParameters
+from control.staged_terminal_controller import StagedTrajectoryTerminalController
+from control.trajectory import reference, DURATIONS
+from integration.mujoco_owner import OwnerConfig, OwnerSession, Measurement
+from integration.localisation_policy import LocalisationPolicy
+
+DT = .05
+TRAJECTORY_NAME = 'straight'
+DURATION = DURATIONS[TRAJECTORY_NAME]
+WORLD_FRAME, BODY_FRAME = 'map', 'base'
+TASK_ID = 'straight_tracking_test'
+# Retained diagnostic timing settings, NOT calibrated hardware safety limits.
+MAX_AGE_S, COMMAND_TTL_S, MAX_LEASE_S, GRID_TOLERANCE_S = .50, .20, .25, 1e-6
+
+
+def camera_observation(packet, metadata):
+    """Same team detector/PnP; camera-origin data with explicitly associated ID."""
+    if packet.rgb is None:
+        return None
+    detection = detect_aruco_marker(packet.rgb)
+    if detection is None:
+        return None
+    marker_id, corners = detection
+    if marker_id not in metadata['landmarks']:
+        raise ValueError('Unknown marker ID')
+    configure_marker_size(metadata['marker_sizes'][marker_id])
+    translation, _ = estimate_marker_pose(corners, np.asarray(metadata['camera_matrix']), np.zeros(5))
+    measurement = get_range_and_bearing(translation)
+    if measurement.shape != (2,1) or not np.isfinite(measurement).all() or measurement[0,0] <= 0:
+        raise ValueError('Invalid camera measurement')
+    return marker_id, measurement, np.asarray(metadata['landmarks'][marker_id])
+
+
+def reference_for_obstacle(pose, relative_time, obstacle):
+    """Preserve the team's diagnostic detour heuristic; NOT swept-path planning."""
+    normal = reference(TRAJECTORY_NAME, relative_time)
+    if obstacle is None or obstacle[0] >= .4:
+        return normal
+    theta = pose[2]
+    forward = np.array([np.cos(theta), np.sin(theta)])
+    left = np.array([-np.sin(theta), np.cos(theta)])
+    sign = -1 if obstacle[1] > 0 else 1
+    xy = pose[:2]+.25*forward+sign*.20*left
+    heading = wrap(theta+sign*np.deg2rad(20))
+    return type(normal)(pose=np.r_[xy,heading], input=np.array([.05,0.]))
+
+
+def dispatch(interface, snapshot, reference_provider, *, relative_time):
+    """No grant is manufactured. Stop before the scheduled terminal handoff."""
+    if relative_time >= DURATION:
+        return interface.disarm('trajectory_complete; terminal_clearance_unavailable')
+    if snapshot.localisation_valid is not True:
+        return interface.disarm('localisation_invalid: '+snapshot.validity_reason)
+    return interface.step(snapshot, reference_provider, clearance=None)
+
+
+def run(*, criteria=None, render_camera=True, max_samples=None):
+    """One explicit arm attempt; every rejected sample terminates this session.
+
+    Q/R/prior below retain team diagnostic settings, not calibrated uncertainty.
+    Strict 20 Hz slots fail closed on delay/overflow; no catch-up/relabelled samples.
+    """
+    if max_samples is None: max_samples = round(DURATION/DT)+1
+    if type(max_samples) is not int or max_samples < 1:
+        raise ValueError('Positive sample count required')
+    epoch = 'navigation-'+str(time.monotonic_ns())
+    config = OwnerConfig(sample_time=DT, max_lease_s=MAX_LEASE_S,
+                         render_camera=render_camera, epoch=epoch,
+                         max_runtime_s=DURATION+10.)
+    history, reasons, marker_counts = [], [], {0:0,1:0}
+    final_stop = None
+    with OwnerSession(config) as owner:
+        metadata = owner.metadata
+        # Static map metadata is configuration, never an observed robot truth pose.
+        goal = np.array([metadata['landmarks'][0][0]-.30, metadata['landmarks'][0][1], 0.])
+        parameters = TerminalParameters(sample_time=DT)
+        quality = LocalisationPolicy(epoch,WORLD_FRAME,BODY_FRAME,DT,MAX_AGE_S,
+                                      GRID_TOLERANCE_S,criteria)
+        policy = InterfacePolicy(WORLD_FRAME,BODY_FRAME,MAX_AGE_S,COMMAND_TTL_S,
+            GRID_TOLERANCE_S, criteria.accepts if criteria else lambda previous,current:False,
+            sample_time=DT)
+        interface = EstimatedPoseInterface(owner.client,
+            lambda:StagedTrajectoryTerminalController(goal,DURATION,parameters),
+            policy,goal=goal,task_id=TASK_ID,terminal_start_s=DURATION,
+            parameters=parameters,clock=time.monotonic)
+        ekf = TurtleBotEKF([0.,0.,0.], np.diag([.05**2,.05**2,np.deg2rad(5)**2]),
+                          np.diag([.005**2,.005**2,np.deg2rad(.5)**2]),
+                          np.diag([.03**2,np.deg2rad(1.5)**2]))
+        previous = None
+        last_correction = None
+        # Prior represents simulation time zero, as in the original integration.
+        last_state_time = 0.
+        arm_attempted = False
+        try:
+            for index in range(max_samples):
+                packet = owner.next_measurement()
+                received = time.monotonic()
+                if (not isinstance(packet,Measurement) or packet.wheels.shape != (2,)
+                        or not np.isfinite(packet.wheels).all()
+                        or packet.epoch != epoch or packet.frame_id != WORLD_FRAME
+                        or packet.body_frame_id != BODY_FRAME or packet.sequence != index
+                        or packet.lidar.ndim != 1 or np.isnan(packet.lidar).any()
+                        or not np.isfinite(packet.sample_monotonic)
+                        or packet.sample_monotonic > received
+                        or not np.isfinite(packet.state_time)
+                        or abs(packet.state_time-(index+1)*DT)>GRID_TOLERANCE_S
+                        or packet.state_time <= last_state_time
+                        or received >= packet.sample_monotonic+MAX_AGE_S):
+                    raise ValueError('Invalid/stale owner packet or missed required interval')
+                elapsed = packet.state_time-last_state_time
+                ekf.predict(wheel_odometry(*packet.wheels),elapsed)
+                last_state_time = packet.state_time
+                camera_status = 'missing'
+                try:
+                    observation = camera_observation(packet,metadata)
+                    if observation is not None:
+                        marker_id,measurement,landmark = observation
+                        ekf.update_camera(measurement,landmark,metadata['camera_offset'],metadata['camera_yaw'])
+                        last_correction = packet.state_time
+                        marker_counts[marker_id] += 1
+                        camera_status = 'corrected'
+                except Exception:
+                    camera_status = 'failed'
+                snapshot = PoseEstimate(ekf.state,ekf.P,packet.state_time,packet.sample_monotonic,
+                    packet.sequence,packet.epoch,packet.frame_id,packet.body_frame_id,False)
+                decision = quality.assess(snapshot,previous=previous,
+                    expected_time=(index+1)*DT,now=time.monotonic(),camera_status=camera_status,
+                    last_correction_state_time=last_correction)
+                snapshot = replace(snapshot,localisation_valid=decision.valid,validity_reason=decision.reason)
+                reasons.append(decision.reason)
+                # Truth is fetched ONLY for scoring, never passed to policy/EKF/reference.
+                evaluation = owner.evaluation(packet.sequence)
+                obstacle = get_front_obstacle(packet.lidar)
+                relative_time = index*DT
+                row = dict(sequence=index,state_time=packet.state_time,
+                    acquisition_monotonic=packet.sample_monotonic,estimate=snapshot.pose.copy(),
+                    covariance=snapshot.covariance.copy(),valid=decision.valid,
+                    camera_status=camera_status,obstacle=obstacle,
+                    reference=reference(TRAJECTORY_NAME,relative_time).pose.copy(),
+                    truth=None if evaluation is None else evaluation.pose)
+                history.append(row)
+                if snapshot.localisation_valid and not arm_attempted:
+                    arm_attempted = True
+                    armed = interface.arm(epoch=epoch,state_time_origin=packet.state_time)
+                    if not armed.accepted:
+                        reasons.append(armed.reason)
+                        break
+                result = dispatch(interface,snapshot,
+                    lambda t:reference_for_obstacle(snapshot.pose,t,obstacle),relative_time=relative_time)
+                row['mode'] = result.controller_mode
+                row['reason'] = result.reason
+                if not result.accepted:
+                    break
+                previous = snapshot
+        except Exception as error:
+            reasons.append(type(error).__name__+': '+str(error))
+            interface.disarm(reasons[-1])
+        finally:
+            final_stop = interface.disarm('integration_complete; no_terminal_clearance')
+        report = dict(history=history,reasons=reasons,marker_counts=marker_counts,
+                      stop_confirmed=final_stop.zero_dispatch_confirmed,armed_once=arm_attempted,
+                      terminal_clearance=False,owner_pid=metadata['owner_pid'])
+    if owner.error:
+        report['owner_error'] = owner.error
+        report['stop_confirmed'] = False
+    print('Diagnostic integration; terminal manoeuvres disabled.')
+    print('Samples:',len(history),'arm attempted:',arm_attempted,'zero confirmed:',report['stop_confirmed'])
+    print('Validity/rejection reasons:',reasons)
+    scored = [row for row in history if row['truth'] is not None]
+    if arm_attempted and len(scored)>1:
+        truth=np.array([row['truth'] for row in scored]);estimate=np.array([row['estimate'] for row in scored])
+        refs=np.array([row['reference'] for row in scored])
+        print('Diagnostic localisation position RMSE:',float(np.sqrt(np.mean(np.sum((truth[:,:2]-estimate[:,:2])**2,axis=1)))))
+        print('Diagnostic tracking position RMSE:',float(np.sqrt(np.mean(np.sum((truth[:,:2]-refs[:,:2])**2,axis=1)))))
+    else:
+        print('No autonomous tracking performance or docking claim.')
+    return report
+
+
+if __name__ == '__main__':
+    run()

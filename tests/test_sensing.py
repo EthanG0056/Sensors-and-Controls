@@ -1,3 +1,4 @@
+import ast
 import contextlib
 import io
 import time
@@ -119,14 +120,17 @@ class ArucoCameraTests(MuJoCoSensorTests):
             (1, 2),
         )
 
-        measurement = aruco_camera.get_camera_measurement(
+        result = aruco_camera.get_camera_measurement(
             self.model,
             self.data,
             "test_camera",
         )
 
-        self.assertIsNotNone(measurement)
+        self.assertIsNotNone(result)
+        marker_id, measurement = result
+        self.assertEqual(marker_id, self.marker_id)
         self.assertEqual(measurement.shape, (2, 1))
+        self.assertTrue(np.isfinite(measurement).all())
         self.assertAlmostEqual(float(measurement[0, 0]), 2.0, delta=0.25)
         self.assertAlmostEqual(float(measurement[1, 0]), 0.0, delta=0.12)
 
@@ -156,6 +160,42 @@ class ArucoCameraTests(MuJoCoSensorTests):
         np.testing.assert_allclose(measurement, [[5.0], [-np.arctan2(3.0, 4.0)]])
         with self.assertRaises(ValueError):
             aruco_camera.get_range_and_bearing(np.array([1.0, 0.0, 0.0]))
+
+
+class CameraCallerContractTests(unittest.TestCase):
+    def test_association_and_invalid_observations_without_running_scripts(self):
+        # These scripts run simulations/write debug images at import. Compile only
+        # their pure API-validation functions so these tests cannot trigger either.
+        root = Path(__file__).resolve().parents[1]
+        names = ("test_navigation_camera.py", "test_ekf_lqr_tracking.py",
+                 "benchmark_localisation.py", "benchmark_localisation_dropout.py")
+        for name in names:
+            path = root / "integration/tests" / name
+            tree = ast.parse(path.read_text())
+            node = next(n for n in tree.body if isinstance(n, ast.FunctionDef)
+                        and n.name == "_associated_camera_observation")
+            namespace = {"np": np}
+            exec(compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec"), namespace)
+            convert = namespace[node.name]
+            measurement = np.array([[1.2], [.1]])
+            landmark = np.array([2., .3])
+            with self.subTest(caller=name):
+                self.assertIsNone(convert(None, {0: landmark}))
+                self.assertIsNone(convert((1, measurement), {0: landmark}))
+                marker_id, observed, mapped = convert((0, measurement), {0: landmark})
+                self.assertEqual(marker_id, 0)
+                np.testing.assert_array_equal(observed, measurement)
+                np.testing.assert_array_equal(mapped, landmark)
+                self.assertFalse(np.shares_memory(observed, measurement))
+                self.assertFalse(np.shares_memory(mapped, landmark))
+                self.assertEqual(convert((1, measurement), {1: landmark})[0], 1)
+                for bad in (measurement, (0,), (True, measurement), (0, [1., .1]),
+                            (0, [[np.nan], [0.]]), (0, [[1.], [np.inf]]),
+                            (0, [[0.], [0.]]), (0, [[-1.], [0.]])):
+                    with self.assertRaises(ValueError):
+                        convert(bad, {0: landmark})
+                with self.assertRaises(ValueError):
+                    convert((0, measurement), {0: [np.nan, 0.]})
 
 
 class LidarTests(MuJoCoSensorTests):
