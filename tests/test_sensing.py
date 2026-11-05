@@ -1,7 +1,5 @@
 import contextlib
 import io
-from pathlib import Path
-import sys
 import time
 import unittest
 
@@ -9,6 +7,8 @@ import cv2
 import mujoco
 import numpy as np
 
+from pathlib import Path
+import sys
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
