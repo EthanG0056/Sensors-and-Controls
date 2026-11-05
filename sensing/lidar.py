@@ -3,10 +3,22 @@ from typing import Protocol
 
 import numpy as np
 import matplotlib.pyplot as plt
-import open3d as o3d
-from machinevisiontoolbox import Image, CentralCamera
 from numpy.typing import NDArray
-from spatialmath import SE3
+
+
+# Variables
+
+NUM_LIDAR_RAYS = 36
+
+LIDAR_ANGLES = np.deg2rad(
+    np.arange(0, 360, 10)
+)
+
+LIDAR_ANGLES = (
+    LIDAR_ANGLES + np.pi
+) % (
+    2.0 * np.pi
+) - np.pi
 
 
 @dataclass(frozen=True)
@@ -238,7 +250,7 @@ def get_closest_obstacle(
 
 def show_cloud(points, colours=None, title='', frame='robot', ax=None,
                elev=22, azim=-75, size=1, nmax=20000, seed=0):
-    
+
     # Scatter plot of a point cloud, in the robot frame or the camera frame.
     P = np.asarray(points)
     C = colours
@@ -271,3 +283,78 @@ def show_cloud(points, colours=None, title='', frame='robot', ax=None,
 
 def cloud_stats(name, pcd):
     print(f'{name:24s} {len(pcd.points):8d} points')
+
+
+def get_lidar_ranges(
+    model,
+    data,
+):
+
+    ranges = np.full(
+        NUM_LIDAR_RAYS,
+        np.inf,
+    )
+
+    for i in range(NUM_LIDAR_RAYS):
+
+        sensor_name = (
+            f"lidar_{i:02d}_sensor"
+        )
+
+        sensor_id = model.sensor(
+            sensor_name
+        ).id
+
+        sensor_address = model.sensor_adr[
+            sensor_id
+        ]
+
+        distance = data.sensordata[
+            sensor_address
+        ]
+
+        if distance >= 0.0:
+            ranges[i] = distance
+
+    return ranges
+
+
+def get_front_obstacle(
+    ranges,
+    half_angle_deg=40.0,
+):
+
+    half_angle = np.deg2rad(
+        half_angle_deg
+    )
+
+    front_mask = (
+        np.abs(LIDAR_ANGLES)
+        <= half_angle
+    )
+
+    front_ranges = np.where(
+        front_mask,
+        ranges,
+        np.inf,
+    )
+
+    closest_index = np.argmin(
+        front_ranges
+    )
+
+    closest_distance = front_ranges[
+        closest_index
+    ]
+
+    if not np.isfinite(
+        closest_distance
+    ):
+        return None
+
+    return (
+        closest_distance,
+        LIDAR_ANGLES[
+            closest_index
+        ],
+    )
