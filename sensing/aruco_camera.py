@@ -359,7 +359,18 @@ def get_camera_measurement(
     dimensions = (width, height)
     if _renderer is None or _renderer_model is not model or _renderer_dimensions != dimensions:
         close_camera_renderer()
-        _renderer = mujoco.Renderer(model, height=height, width=width)
+
+        _renderer = mujoco.Renderer(
+            model,
+            height=height,
+            width=width
+        )
+
+        # Hide MuJoCo rangefinder rays from the camera image.
+        _renderer._scene_option.flags[
+            mujoco.mjtVisFlag.mjVIS_RANGEFINDER
+        ] = False
+
         _renderer_model = model
         _renderer_dimensions = dimensions
 

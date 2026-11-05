@@ -123,6 +123,48 @@
         class="collision"
       />
 
+      <!-- ======================= LIDAR ======================= -->
+
+      <body name="lidar_body" pos="0 0 0.18">
+
+        <site name="lidar_00" pos="0 0 0" euler="0 1.570796 0.000000"/>
+        <site name="lidar_01" pos="0 0 0" euler="0 1.570796 0.174533"/>
+        <site name="lidar_02" pos="0 0 0" euler="0 1.570796 0.349066"/>
+        <site name="lidar_03" pos="0 0 0" euler="0 1.570796 0.523599"/>
+        <site name="lidar_04" pos="0 0 0" euler="0 1.570796 0.698132"/>
+        <site name="lidar_05" pos="0 0 0" euler="0 1.570796 0.872665"/>
+        <site name="lidar_06" pos="0 0 0" euler="0 1.570796 1.047198"/>
+        <site name="lidar_07" pos="0 0 0" euler="0 1.570796 1.221730"/>
+        <site name="lidar_08" pos="0 0 0" euler="0 1.570796 1.396263"/>
+        <site name="lidar_09" pos="0 0 0" euler="0 1.570796 1.570796"/>
+        <site name="lidar_10" pos="0 0 0" euler="0 1.570796 1.745329"/>
+        <site name="lidar_11" pos="0 0 0" euler="0 1.570796 1.919862"/>
+        <site name="lidar_12" pos="0 0 0" euler="0 1.570796 2.094395"/>
+        <site name="lidar_13" pos="0 0 0" euler="0 1.570796 2.268928"/>
+        <site name="lidar_14" pos="0 0 0" euler="0 1.570796 2.443461"/>
+        <site name="lidar_15" pos="0 0 0" euler="0 1.570796 2.617994"/>
+        <site name="lidar_16" pos="0 0 0" euler="0 1.570796 2.792527"/>
+        <site name="lidar_17" pos="0 0 0" euler="0 1.570796 2.967060"/>
+        <site name="lidar_18" pos="0 0 0" euler="0 1.570796 3.141593"/>
+        <site name="lidar_19" pos="0 0 0" euler="0 1.570796 3.316126"/>
+        <site name="lidar_20" pos="0 0 0" euler="0 1.570796 3.490659"/>
+        <site name="lidar_21" pos="0 0 0" euler="0 1.570796 3.665191"/>
+        <site name="lidar_22" pos="0 0 0" euler="0 1.570796 3.839724"/>
+        <site name="lidar_23" pos="0 0 0" euler="0 1.570796 4.014257"/>
+        <site name="lidar_24" pos="0 0 0" euler="0 1.570796 4.188790"/>
+        <site name="lidar_25" pos="0 0 0" euler="0 1.570796 4.363323"/>
+        <site name="lidar_26" pos="0 0 0" euler="0 1.570796 4.537856"/>
+        <site name="lidar_27" pos="0 0 0" euler="0 1.570796 4.712389"/>
+        <site name="lidar_28" pos="0 0 0" euler="0 1.570796 4.886922"/>
+        <site name="lidar_29" pos="0 0 0" euler="0 1.570796 5.061455"/>
+        <site name="lidar_30" pos="0 0 0" euler="0 1.570796 5.235988"/>
+        <site name="lidar_31" pos="0 0 0" euler="0 1.570796 5.410521"/>
+        <site name="lidar_32" pos="0 0 0" euler="0 1.570796 5.585054"/>
+        <site name="lidar_33" pos="0 0 0" euler="0 1.570796 5.759587"/>
+        <site name="lidar_34" pos="0 0 0" euler="0 1.570796 5.934119"/>
+        <site name="lidar_35" pos="0 0 0" euler="0 1.570796 6.108652"/>
+
+      </body>
 
       <!-- ==================== FRONT CAMERA ==================== -->
 
@@ -223,6 +265,54 @@
     />
 
   </actuator>
+
+
+  <!-- ====================================================== -->
+  <!-- LIDAR SENSORS                                          -->
+  <!-- ====================================================== -->
+
+  <sensor>
+
+    <rangefinder name="lidar_00_sensor" site="lidar_00"/>
+    <rangefinder name="lidar_01_sensor" site="lidar_01"/>
+    <rangefinder name="lidar_02_sensor" site="lidar_02"/>
+    <rangefinder name="lidar_03_sensor" site="lidar_03"/>
+    <rangefinder name="lidar_04_sensor" site="lidar_04"/>
+    <rangefinder name="lidar_05_sensor" site="lidar_05"/>
+    <rangefinder name="lidar_06_sensor" site="lidar_06"/>
+    <rangefinder name="lidar_07_sensor" site="lidar_07"/>
+    <rangefinder name="lidar_08_sensor" site="lidar_08"/>
+    <rangefinder name="lidar_09_sensor" site="lidar_09"/>
+    <rangefinder name="lidar_10_sensor" site="lidar_10"/>
+    <rangefinder name="lidar_11_sensor" site="lidar_11"/>
+    <rangefinder name="lidar_12_sensor" site="lidar_12"/>
+    <rangefinder name="lidar_13_sensor" site="lidar_13"/>
+    <rangefinder name="lidar_14_sensor" site="lidar_14"/>
+    <rangefinder name="lidar_15_sensor" site="lidar_15"/>
+    <rangefinder name="lidar_16_sensor" site="lidar_16"/>
+    <rangefinder name="lidar_17_sensor" site="lidar_17"/>
+    <rangefinder name="lidar_18_sensor" site="lidar_18"/>
+    <rangefinder name="lidar_19_sensor" site="lidar_19"/>
+    <rangefinder name="lidar_20_sensor" site="lidar_20"/>
+    <rangefinder name="lidar_21_sensor" site="lidar_21"/>
+    <rangefinder name="lidar_22_sensor" site="lidar_22"/>
+    <rangefinder name="lidar_23_sensor" site="lidar_23"/>
+    <rangefinder name="lidar_24_sensor" site="lidar_24"/>
+    <rangefinder name="lidar_25_sensor" site="lidar_25"/>
+    <rangefinder name="lidar_26_sensor" site="lidar_26"/>
+    <rangefinder name="lidar_27_sensor" site="lidar_27"/>
+    <rangefinder name="lidar_28_sensor" site="lidar_28"/>
+    <rangefinder name="lidar_29_sensor" site="lidar_29"/>
+    <rangefinder name="lidar_30_sensor" site="lidar_30"/>
+    <rangefinder name="lidar_31_sensor" site="lidar_31"/>
+    <rangefinder name="lidar_32_sensor" site="lidar_32"/>
+    <rangefinder name="lidar_33_sensor" site="lidar_33"/>
+    <rangefinder name="lidar_34_sensor" site="lidar_34"/>
+    <rangefinder name="lidar_35_sensor" site="lidar_35"/>
+
+  <!-- Continue to lidar_35_sensor -->
+
+  </sensor>
 
 
   <!-- ============================================================ -->
