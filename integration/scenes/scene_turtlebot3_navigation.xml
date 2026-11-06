@@ -212,7 +212,7 @@
     <geom
       name="obstacle_1"
       type="box"
-      pos="0.6 0.15 0.15"
+      pos="0.6 0.2 0.15"
       size="0.075 0.075 0.15"
       rgba="0.75 0.20 0.20 1"
     />
@@ -220,7 +220,7 @@
     <!-- Obstacle 2 with relative ArUco marker -->
     <body
       name="obstacle_2_body"
-      pos="1.35 -0.2 0"
+      pos="1.35 -0.15 0"
     >
 
       <!-- Obstacle 2 -->

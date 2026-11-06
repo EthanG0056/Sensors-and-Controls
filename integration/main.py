@@ -63,7 +63,7 @@ DURATION = DURATIONS[
     TRAJECTORY_NAME
 ]
 
-TERMINAL_TIME = 45.0
+TERMINAL_TIME = 60.0
 
 TOTAL_DURATION = (
     DURATION
@@ -92,6 +92,17 @@ TASK_ID = "straight_tracking_test"
 
 NAVIGATION_SPEED = 0.08
 NAVIGATION_TARGET_X = 1.85
+
+# Start position robustness test.
+INITIAL_X = 0.0
+INITIAL_Y = 0.0
+INITIAL_THETA = np.deg2rad(0.0)
+
+
+# Camera dropout robustness test.
+CAMERA_DROPOUT_ENABLED = False
+CAMERA_DROPOUT_START = 2.0
+CAMERA_DROPOUT_END = 12.0
 
 
 # ============================================================ #
@@ -306,6 +317,44 @@ data = mujoco.MjData(
     model
 )
 
+# Set disturbed initial robot pose.
+base_joint = model.joint(
+    "base_joint"
+).id
+
+base_qpos = model.jnt_qposadr[
+    base_joint
+]
+
+data.qpos[
+    base_qpos
+] = INITIAL_X
+
+data.qpos[
+    base_qpos + 1
+] = INITIAL_Y
+
+# Free-joint quaternion for yaw rotation.
+data.qpos[
+    base_qpos + 3
+] = np.cos(
+    INITIAL_THETA / 2.0
+)
+
+data.qpos[
+    base_qpos + 4
+] = 0.0
+
+data.qpos[
+    base_qpos + 5
+] = 0.0
+
+data.qpos[
+    base_qpos + 6
+] = np.sin(
+    INITIAL_THETA / 2.0
+)
+
 mujoco.mj_forward(
     model,
     data
@@ -450,9 +499,9 @@ print(
 # ============================================================ #
 
 initial_state = np.array([
-    0.0,
-    0.0,
-    0.0,
+    INITIAL_X,
+    INITIAL_Y,
+    INITIAL_THETA,
 ])
 
 P0 = np.diag([
@@ -467,10 +516,30 @@ Q = np.diag([
     np.deg2rad(0.5)**2,
 ])
 
+#========= ORIGINAL R ==========#
 R = np.diag([
     0.03**2,
     np.deg2rad(1.5)**2,
 ])
+
+#========== TEST R =============#
+# # Test R1: 0.5R
+# R = 0.5 * np.diag([
+#     0.03**2,
+#     np.deg2rad(1.5)**2,
+# ])
+
+# # Test R2: nominal R
+# R = np.diag([
+#     0.03**2,
+#     np.deg2rad(1.5)**2,
+# ])
+
+# # Test R3: 2R
+# R = 2.0 * np.diag([
+#     0.03**2,
+#     np.deg2rad(1.5)**2,
+# ])
 
 ekf = TurtleBotEKF(
     initial_state,
@@ -766,16 +835,16 @@ marker_detection_counts = {
 
 #================== Obstacle avoidance state ==================#
 
-AVOID_ENTER_DISTANCE = 0.20
+AVOID_ENTER_DISTANCE = 0.25
 
 avoidance_active = False
 avoidance_phase = None
 avoidance_direction = 0.0
 avoidance_phase_start = 0.0
 
-TURN_TIME = 2
+TURN_TIME = 2.3
 DRIVE_TIME = 5
-REJOIN_TIME = 3.0
+REJOIN_TIME = 3
 
 DOCKING_TRIGGER_DISTANCE = 0.90
 docking_active = False
@@ -856,6 +925,15 @@ try:
             data,
             "front_camera",
         )
+
+        # Simulate complete loss of camera measurements.
+        camera_dropout_active = (
+            CAMERA_DROPOUT_ENABLED
+            and CAMERA_DROPOUT_START <= state_time < CAMERA_DROPOUT_END
+        )
+
+        if camera_dropout_active:
+            camera_result = None
 
         camera_visible = (
             camera_result is not None
