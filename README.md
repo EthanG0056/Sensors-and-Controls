@@ -59,22 +59,29 @@ leases. Related interface and gateway checks are in
 **Ethan Griffiths:**
 
 - Sensing:
+
   - aruco camera
   - lidar
   - calibration
 
 **Lachlan Taylor:**
 
-- Estimation:
-  - ekf
-  - calibration
+- State Estimation / EKF:
 
-- System Integration (main + tests)
-- Aruco Markers
-- Scene
-- Obstacle avoidance
-- Charger station docking procedure
-- Mujoco simulation
+  - developed full Extended Kallman Filter (ekf) model with differential drive wheel odometry conversion from wheel speed to linear and angular velocity (v,w) calculations, 
+    nonlinear motion model for both straight and turn trajectory, jacobian of motion model with respect to state, camera reading and jacobian, 
+    and the main EKF prediction and measurement update process including State covariance (P), process-noise covariance (Q) and measurement-noise covariance (R) and Kalman gain.
+  - calibration of ekf parameters and testing localisation performance against ground truth
+
+- System Integration:
+
+  - Integrating and modifying all team members files into the Integration folder to run the simulation in integration.main
+  - Created and configured Mujoco navigation scene including Aruco Markers, obstacles and charging station
+  - Integrated team member Aruco marker detection with EKF landmark map and tested + debugged in Mujoco
+  - Obstacle avoidance programming and integration with LiDAR + coordination with LQR/EKF trajectory controller
+  - Charger station robot docking procedure using aurco camera sensing + coordination with LQR/EKF trajectory controller
+  - Mujoco simulation and testing + debugging of full running system
+  - Robustness testing with varying obstacle placement and operating conditions assessing localisation, trajectory tracking, obstacle avoidance and docking.
 
 **Arnoe Kruger:**
 
@@ -108,3 +115,8 @@ System Integration and Validation:
 
 - Test files for camera and lidar functions in MuJoCo
 - Required pips installation
+
+**ChatGPT:**
+
+- Quick understanding and explanation of teammates code
+- Debugging formating/spelling errors causing the code to not run
